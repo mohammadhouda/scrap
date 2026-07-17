@@ -1,0 +1,97 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Source {
+  id            String     @id @default(cuid())
+  name          String     @unique
+  seedUrl       String
+  allowPatterns String[]
+  denyPatterns  String[]
+  renderJs      Boolean    @default(false)
+  maxDepth      Int        @default(3)
+  ratePerSecond Float      @default(1.0)
+  scheduleCron  String?
+  createdAt     DateTime   @default(now())
+  pages         Page[]
+  crawls        CrawlRun[]
+}
+
+model CrawlRun {
+  id          String      @id @default(cuid())
+  sourceId    String
+  source      Source      @relation(fields: [sourceId], references: [id])
+  startedAt   DateTime    @default(now())
+  finishedAt  DateTime?
+  status      CrawlStatus @default(RUNNING)
+  pagesQueued Int         @default(0)
+  pagesDone   Int         @default(0)
+  pagesFailed Int         @default(0)
+
+  @@index([sourceId])
+}
+
+enum CrawlStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model Page {
+  id          String        @id @default(cuid())
+  sourceId    String
+  source      Source        @relation(fields: [sourceId], references: [id])
+  url         String        @unique
+  urlHash     String
+  firstSeenAt DateTime      @default(now())
+  lastSeenAt  DateTime      @default(now())
+  versions    PageVersion[]
+
+  @@index([sourceId])
+  @@index([urlHash])
+}
+
+model PageVersion {
+  id          String    @id @default(cuid())
+  pageId      String
+  page        Page      @relation(fields: [pageId], references: [id])
+  version     Int
+  contentHash String
+  rawHtml     String    @db.Text
+  cleanedMd   String    @db.Text
+  title       String?
+  language    String?
+  tables      Json?
+  fetchedAt   DateTime  @default(now())
+  chunks      Chunk[]
+
+  @@unique([pageId, version])
+  @@index([contentHash])
+}
+
+model Chunk {
+  id            String      @id @default(cuid())
+  pageVersionId String
+  pageVersion   PageVersion @relation(fields: [pageVersionId], references: [id], onDelete: Cascade)
+  index         Int
+  heading       String?
+  content       String      @db.Text
+  contentType   ChunkType   @default(PROSE)
+  tokenCount    Int
+
+  @@index([pageVersionId])
+}
+
+enum ChunkType {
+  PROSE
+  TABLE
+  CODE
+  LIST
+}
