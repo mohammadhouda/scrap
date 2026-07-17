@@ -29,7 +29,7 @@ packages/
 ## Local development
 
 ```bash
-cp .env.example .env       # fill in OPENAI_API_KEY / ANTHROPIC_API_KEY
+cp .env.example .env       # fill in OPENAI_API_KEY
 pnpm install
 docker compose up -d postgres redis
 

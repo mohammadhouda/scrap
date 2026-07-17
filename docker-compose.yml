@@ -33,7 +33,6 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/scraper
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       API_PORT: 4000
       ADMIN_TOKEN: ${ADMIN_TOKEN:-change-me}
     ports:
@@ -52,7 +51,6 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/scraper
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
     depends_on:
       postgres:

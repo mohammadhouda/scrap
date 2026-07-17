@@ -1,18 +1,25 @@
 import { QUEUE_NAMES } from '@scraper/shared';
+import { buildDiscoverWorker } from './discover-worker.js';
+import { createQueues } from './queues.js';
+import { createRedisConnection } from './redis.js';
 import { buildScrapeWorker } from './worker.js';
 
-const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
+const connection = createRedisConnection();
+const queues = createQueues(connection);
 
-const scrapeWorker = buildScrapeWorker({
-  host: redisUrl.hostname,
-  port: Number(redisUrl.port || 6379),
-  maxRetriesPerRequest: null,
-});
+const scrapeWorker = buildScrapeWorker(connection, queues);
+const discoverWorker = buildDiscoverWorker(connection, queues);
 
-scrapeWorker.on('ready', () => {
-  console.log(`worker listening on queue "${QUEUE_NAMES.scrape}"`);
-});
+for (const worker of [scrapeWorker, discoverWorker]) {
+  worker.on('ready', () => {
+    console.log(`worker listening on queue "${worker.name}"`);
+  });
+  worker.on('failed', (job, err) => {
+    console.error(`job ${job?.id} on queue "${worker.name}" failed`, err);
+  });
+  worker.on('error', (err) => {
+    console.error(`worker error on queue "${worker.name}"`, err);
+  });
+}
 
-scrapeWorker.on('error', (err) => {
-  console.error('worker error', err);
-});
+console.log(`queues ready: ${Object.values(QUEUE_NAMES).join(', ')}`);

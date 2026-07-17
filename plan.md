@@ -34,7 +34,7 @@ A distributed, fault-tolerant web scraping framework that:
 | Vector store | `pgvector` on the same Postgres | One DB, less ops overhead. Justify vs Qdrant in report. |
 | Chunking | `langchain/text_splitter` (Markdown-header + recursive character) | Standard, well-documented, structurally aware. |
 | Embeddings | OpenAI `text-embedding-3-small` | Cheap, strong. 1536-dim. |
-| LLM | Anthropic Claude Sonnet 4.5 | Good citation adherence; matches Mo's existing stack. |
+| LLM | OpenAI GPT-5.5 (GPT-5.5-mini for cheaper/faster paths) | Good citation adherence; one provider for embeddings + LLM simplifies ops. |
 | API | Fastify | Faster than Express, TS-native, low ceremony. |
 | Validation | Zod | Runtime + type-level. |
 | UI | Next.js 15 (App Router) + Tailwind + shadcn/ui | SSR search + streaming answers. |
@@ -179,9 +179,9 @@ CREATE INDEX ON "Chunk" USING hnsw (embedding vector_cosine_ops);
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/scraper
 REDIS_URL=redis://redis:6379
 OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
 EMBEDDING_MODEL=text-embedding-3-small
-LLM_MODEL=claude-sonnet-4-5
+LLM_MODEL=gpt-5.5
+LLM_MODEL_MINI=gpt-5.5-mini
 API_PORT=4000
 WEB_PORT=3000
 WORKER_CONCURRENCY=5
@@ -326,7 +326,7 @@ Sources:
 [2] ...
 ```
 
-- [ ] `packages/rag/ask.ts` — orchestrator: retrieve → prompt → stream from Claude → parse citations → return `{ answerStream, citations: [{ n, url, title, chunkId }] }`
+- [ ] `packages/rag/ask.ts` — orchestrator: retrieve → prompt → stream from GPT-5.5 → parse citations → return `{ answerStream, citations: [{ n, url, title, chunkId }] }`
 - [ ] Multi-source synthesis test: seed a question whose answer requires chunks from 2+ sites; assert both appear in citations.
 
 **Acceptance:** `/ask` returns an answer with at least one `[n]` per non-trivial claim, and the cited URLs are real.
