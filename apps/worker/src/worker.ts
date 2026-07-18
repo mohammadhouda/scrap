@@ -1,6 +1,7 @@
 import { Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { prisma } from '@scraper/db';
+import { cleanHtml, detectLanguage, extractTables } from '@scraper/processor';
 import { QUEUE_NAMES } from '@scraper/shared';
 import {
   acquireRateLimitSlot,
@@ -37,8 +38,7 @@ export async function processScrapeJob(connection: Redis, queues: Queues, data: 
 
   const result = source.renderJs ? await playwrightFetch(url) : await cheerioFetch(url);
 
-  // Phase 2 replaces this placeholder with the real Readability + Turndown pipeline.
-  const cleanedMd = result.html;
+  const { cleanedMd, title } = cleanHtml(result.html, url, result.title);
   const contentHash = sha256(cleanedMd);
 
   const latest = await getLatestVersion(url);
@@ -52,7 +52,9 @@ export async function processScrapeJob(connection: Redis, queues: Queues, data: 
     url,
     rawHtml: result.html,
     cleanedMd,
-    title: result.title,
+    title,
+    tables: extractTables(result.html),
+    language: detectLanguage(cleanedMd),
   });
 
   if (depth < source.maxDepth) {

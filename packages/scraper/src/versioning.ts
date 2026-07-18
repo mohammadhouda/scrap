@@ -1,4 +1,5 @@
-import { prisma, type Prisma } from '@scraper/db';
+import { prisma } from '@scraper/db';
+import { processedPageSchema } from '@scraper/shared';
 import { sha256 } from './dedup.js';
 
 export interface PersistVersionInput {
@@ -7,7 +8,7 @@ export interface PersistVersionInput {
   rawHtml: string;
   cleanedMd: string;
   title: string | null;
-  tables?: Prisma.InputJsonValue;
+  tables?: Array<Array<Record<string, string>>>;
   language?: string | null;
 }
 
@@ -24,6 +25,13 @@ export async function touchLastSeen(url: string): Promise<void> {
 }
 
 export async function persistVersion(input: PersistVersionInput) {
+  const processed = processedPageSchema.parse({
+    cleanedMd: input.cleanedMd,
+    title: input.title,
+    tables: input.tables,
+    language: input.language ?? null,
+  });
+
   const urlHash = sha256(input.url);
 
   const page = await prisma.page.upsert({
@@ -39,12 +47,12 @@ export async function persistVersion(input: PersistVersionInput) {
     data: {
       pageId: page.id,
       version: nextVersion,
-      contentHash: sha256(input.cleanedMd),
+      contentHash: sha256(processed.cleanedMd),
       rawHtml: input.rawHtml,
-      cleanedMd: input.cleanedMd,
-      title: input.title,
-      tables: input.tables,
-      language: input.language,
+      cleanedMd: processed.cleanedMd,
+      title: processed.title,
+      tables: processed.tables,
+      language: processed.language,
     },
   });
 }

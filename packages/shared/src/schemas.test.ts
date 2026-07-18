@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sourceSchema } from './schemas.js';
+import { processedPageSchema, sourceSchema } from './schemas.js';
 
 describe('sourceSchema', () => {
   it('applies defaults and accepts a minimal valid source', () => {
@@ -15,6 +15,40 @@ describe('sourceSchema', () => {
 
   it('rejects an invalid seed URL', () => {
     const result = sourceSchema.safeParse({ name: 'x', seedUrl: 'not-a-url' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('processedPageSchema', () => {
+  it('accepts a fully populated processed page', () => {
+    const result = processedPageSchema.safeParse({
+      cleanedMd: '# Hello',
+      title: 'Hello',
+      tables: [[{ UPC: 'abc123' }]],
+      language: 'eng',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts null title/language and defaults tables to an empty array', () => {
+    const result = processedPageSchema.safeParse({
+      cleanedMd: 'content',
+      title: null,
+      language: null,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tables).toEqual([]);
+    }
+  });
+
+  it('rejects an empty cleanedMd', () => {
+    const result = processedPageSchema.safeParse({
+      cleanedMd: '',
+      title: null,
+      tables: [],
+      language: null,
+    });
     expect(result.success).toBe(false);
   });
 });

@@ -20,3 +20,12 @@ export const searchQuerySchema = z.object({
 });
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
+
+export const processedPageSchema = z.object({
+  cleanedMd: z.string().min(1),
+  title: z.string().nullable(),
+  tables: z.array(z.array(z.record(z.string(), z.string()))).default([]),
+  language: z.string().nullable(),
+});
+
+export type ProcessedPage = z.infer<typeof processedPageSchema>;

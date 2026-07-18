@@ -47,6 +47,14 @@ vi.mock('@scraper/scraper', async (importOriginal) => {
   };
 });
 
+const { cleanHtml, extractTables, detectLanguage } = vi.hoisted(() => ({
+  cleanHtml: vi.fn(),
+  extractTables: vi.fn(),
+  detectLanguage: vi.fn(),
+}));
+
+vi.mock('@scraper/processor', () => ({ cleanHtml, extractTables, detectLanguage }));
+
 const { processScrapeJob } = await import('./worker.js');
 
 function fakeQueues() {
@@ -70,6 +78,9 @@ describe('processScrapeJob', () => {
       discoveredLinks: ['https://example.com/next'],
       title: 'Hello',
     });
+    cleanHtml.mockReturnValue({ cleanedMd: 'cleaned hello', title: 'Hello' });
+    extractTables.mockReturnValue([]);
+    detectLanguage.mockReturnValue('eng');
     getLatestVersion.mockResolvedValue(undefined);
     persistVersion.mockResolvedValue({ id: 'pv-1', version: 1 });
   });
@@ -89,10 +100,9 @@ describe('processScrapeJob', () => {
   });
 
   it('touches lastSeenAt and skips persistence when content is unchanged', async () => {
-    getLatestVersion.mockResolvedValue({ contentHash: expect.any(String) });
-    // Match the hash the worker will compute for the fetched HTML.
+    // Match the hash the worker will compute from cleanHtml's output.
     const { sha256 } = await import('@scraper/scraper');
-    getLatestVersion.mockResolvedValue({ contentHash: sha256('<html>hello</html>') });
+    getLatestVersion.mockResolvedValue({ contentHash: sha256('cleaned hello') });
 
     const queues = fakeQueues();
     const result = await processScrapeJob(connection, queues, {
