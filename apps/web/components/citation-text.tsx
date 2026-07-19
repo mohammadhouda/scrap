@@ -26,7 +26,7 @@ export function CitationText({ text, citations }: { text: string; citations: Cit
         <Link
           key={`${n}-${match.index}`}
           href={`/page/${citation.pageId}?chunk=${citation.chunkId}`}
-          className="mx-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-semibold text-white align-super hover:bg-slate-700"
+          className="mx-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-zinc-900 align-super transition-colors hover:bg-zinc-300"
           title={citation.title ?? citation.url}
         >
           {n}

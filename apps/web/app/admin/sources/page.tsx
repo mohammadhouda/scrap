@@ -18,8 +18,8 @@ export default async function AdminSourcesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Sources</h1>
-        <p className="text-sm text-slate-500">Register new crawl targets and trigger crawls.</p>
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-50">Sources</h1>
+        <p className="text-sm text-zinc-500">Register new crawl targets and trigger crawls.</p>
       </div>
 
       <SourceCreateForm />
@@ -42,7 +42,7 @@ export default async function AdminSourcesPage() {
           <TableBody>
             {sources.map((source) => (
               <TableRow key={source.id}>
-                <TableCell className="font-medium text-slate-900">
+                <TableCell className="font-medium text-zinc-50">
                   {source.name}
                   {source.renderJs ? (
                     <Badge variant="secondary" className="ml-2">
@@ -50,7 +50,7 @@ export default async function AdminSourcesPage() {
                     </Badge>
                   ) : null}
                 </TableCell>
-                <TableCell className="max-w-xs truncate">{source.seedUrl}</TableCell>
+                <TableCell className="max-w-xs truncate font-mono text-xs">{source.seedUrl}</TableCell>
                 <TableCell>{source.maxDepth}</TableCell>
                 <TableCell>{source.ratePerSecond}/s</TableCell>
                 <TableCell>

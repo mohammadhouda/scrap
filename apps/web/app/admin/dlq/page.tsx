@@ -30,18 +30,18 @@ export default async function AdminDlqPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Dead-letter queue</h1>
-        <p className="text-sm text-slate-500">Jobs that failed all retry attempts.</p>
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-50">Dead-letter queue</h1>
+        <p className="text-sm text-zinc-500">Jobs that failed all retry attempts.</p>
       </div>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900/60 p-1 w-fit">
         {QUEUES.map((q) => (
           <Link
             key={q}
             href={`/admin/dlq?queue=${q}`}
             className={cn(
-              'rounded px-3 py-1.5 text-sm capitalize',
-              q === queue ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+              'rounded-md px-3 py-1.5 text-sm capitalize transition-colors',
+              q === queue ? 'bg-white text-zinc-900 font-medium' : 'text-zinc-400 hover:text-white',
             )}
           >
             {q}
@@ -66,8 +66,10 @@ export default async function AdminDlqPage({
           <TableBody>
             {jobs.map((job) => (
               <TableRow key={job.id}>
-                <TableCell className="font-mono text-xs">{job.id}</TableCell>
-                <TableCell className="max-w-sm truncate text-xs">{job.failedReason}</TableCell>
+                <TableCell className="font-mono text-xs text-zinc-400">{job.id}</TableCell>
+                <TableCell className="max-w-sm truncate font-mono text-xs text-red-400">
+                  {job.failedReason}
+                </TableCell>
                 <TableCell>{job.attemptsMade}</TableCell>
                 <TableCell>
                   <RetryJobButton jobId={job.id} queue={queue} />

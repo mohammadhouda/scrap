@@ -14,6 +14,20 @@ function modeHref(q: string, mode: SearchMode, source?: string) {
   return `/search?${qs}`;
 }
 
+function FilterLink({ active, href, children }: { active: boolean; href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'rounded-md px-2.5 py-1.5 text-sm capitalize transition-colors',
+        active ? 'bg-white text-zinc-900 font-medium' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-white',
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default async function SearchPage({
   searchParams,
 }: {
@@ -39,89 +53,74 @@ export default async function SearchPage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <SearchBar defaultValue={q} />
 
       {q ? (
-        <div className="flex flex-col gap-6 sm:flex-row">
-          <aside className="flex shrink-0 flex-col gap-4 sm:w-48">
+        <div className="flex flex-col gap-8 sm:flex-row">
+          <aside className="flex shrink-0 flex-col gap-6 sm:w-48">
             <div>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Mode</h2>
-              <div className="flex flex-col gap-1">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Mode</h2>
+              <div className="flex flex-col gap-0.5">
                 {MODES.map((m) => (
-                  <Link
-                    key={m}
-                    href={modeHref(q, m, source)}
-                    className={cn(
-                      'rounded px-2 py-1 text-sm capitalize',
-                      m === mode ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100',
-                    )}
-                  >
+                  <FilterLink key={m} active={m === mode} href={modeHref(q, m, source)}>
                     {m}
-                  </Link>
+                  </FilterLink>
                 ))}
               </div>
             </div>
 
             {sources.length > 0 ? (
               <div>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Source
                 </h2>
-                <div className="flex flex-col gap-1">
-                  <Link
-                    href={modeHref(q, mode)}
-                    className={cn(
-                      'rounded px-2 py-1 text-sm',
-                      !source ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100',
-                    )}
-                  >
+                <div className="flex flex-col gap-0.5">
+                  <FilterLink active={!source} href={modeHref(q, mode)}>
                     All sources
-                  </Link>
+                  </FilterLink>
                   {sources.map((s) => (
-                    <Link
-                      key={s.id}
-                      href={modeHref(q, mode, s.name)}
-                      className={cn(
-                        'rounded px-2 py-1 text-sm',
-                        source === s.name ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100',
-                      )}
-                    >
+                    <FilterLink key={s.id} active={source === s.name} href={modeHref(q, mode, s.name)}>
                       {s.name}
-                    </Link>
+                    </FilterLink>
                   ))}
                 </div>
               </div>
             ) : null}
           </aside>
 
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             {error ? (
               <ErrorState message={error} />
             ) : results.length === 0 ? (
               <Empty label={`No results for "${q}".`} />
             ) : (
-              <ul className="flex flex-col gap-3">
-                {results.map((r) => (
-                  <li key={r.chunkId}>
-                    <Card>
-                      <CardContent className="flex flex-col gap-2 pt-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <Link
-                            href={`/page/${r.pageId}`}
-                            className="truncate text-sm font-medium text-slate-900 hover:underline"
-                          >
-                            {r.title ?? r.url}
-                          </Link>
-                          {r.heading ? <Badge variant="secondary">{r.heading}</Badge> : null}
-                        </div>
-                        <p className="truncate text-xs text-slate-500">{r.url}</p>
-                        <p className="line-clamp-3 text-sm text-slate-700">{r.content}</p>
-                      </CardContent>
-                    </Card>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-zinc-500">
+                  {results.length} result{results.length === 1 ? '' : 's'}
+                </p>
+                <ul className="flex flex-col gap-3">
+                  {results.map((r) => (
+                    <li key={r.chunkId}>
+                      <Card className="transition-colors hover:border-zinc-700">
+                        <CardContent className="flex flex-col gap-2 pt-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <Link
+                              href={`/page/${r.pageId}`}
+                              className="truncate text-sm font-medium text-zinc-50 hover:underline underline-offset-2"
+                            >
+                              {r.title ?? r.url}
+                            </Link>
+                            {r.heading ? <Badge variant="secondary">{r.heading}</Badge> : null}
+                          </div>
+                          <p className="truncate font-mono text-xs text-zinc-500">{r.url}</p>
+                          <p className="line-clamp-3 text-sm leading-relaxed text-zinc-400">{r.content}</p>
+                        </CardContent>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </div>

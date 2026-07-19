@@ -28,8 +28,8 @@ export default async function PageDiffsPage({
   if (versions.length < 2) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold text-slate-900">Version diffs</h1>
-        <p className="truncate text-sm text-slate-500">{page.url}</p>
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-50">Version diffs</h1>
+        <p className="truncate font-mono text-sm text-zinc-500">{page.url}</p>
         <Empty label="This page only has one version -- nothing to diff yet." />
       </div>
     );
@@ -42,38 +42,38 @@ export default async function PageDiffsPage({
     versions[versions.length - 1]!;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Version diffs</h1>
-        <p className="truncate text-sm text-slate-500">{page.url}</p>
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-50">Version diffs</h1>
+        <p className="truncate font-mono text-sm text-zinc-500">{page.url}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-slate-500">Comparing</span>
+        <span className="text-zinc-500">Comparing</span>
         {versions.map((v) => (
           <Link
             key={`from-${v.version}`}
             href={`/admin/pages/${id}/diffs?from=${v.version}&to=${toVersion.version}`}
             className={cn(
-              'rounded px-2 py-1',
+              'rounded-md px-2 py-1 ring-1 ring-inset transition-colors',
               v.version === fromVersion.version
-                ? 'bg-red-100 text-red-800'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                ? 'bg-red-500/10 text-red-300 ring-red-500/20'
+                : 'text-zinc-400 ring-zinc-800 hover:text-white',
             )}
           >
             v{v.version}
           </Link>
         ))}
-        <span className="text-slate-500">against</span>
+        <span className="text-zinc-500">against</span>
         {versions.map((v) => (
           <Link
             key={`to-${v.version}`}
             href={`/admin/pages/${id}/diffs?from=${fromVersion.version}&to=${v.version}`}
             className={cn(
-              'rounded px-2 py-1',
+              'rounded-md px-2 py-1 ring-1 ring-inset transition-colors',
               v.version === toVersion.version
-                ? 'bg-green-100 text-green-800'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
+                : 'text-zinc-400 ring-zinc-800 hover:text-white',
             )}
           >
             v{v.version}

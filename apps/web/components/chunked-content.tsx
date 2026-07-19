@@ -19,7 +19,7 @@ export function ChunkedContent({
   }, [highlightChunkId]);
 
   if (chunks.length === 0) {
-    return <p className="text-sm text-slate-500">No indexed content for this page yet.</p>;
+    return <p className="text-sm text-zinc-500">No indexed content for this page yet.</p>;
   }
 
   return (
@@ -31,21 +31,23 @@ export function ChunkedContent({
             key={chunk.id}
             id={`chunk-${chunk.id}`}
             className={cn(
-              'scroll-mt-20 rounded-md p-3 transition-colors',
-              highlighted && 'bg-amber-100 ring-2 ring-amber-400',
+              'scroll-mt-24 rounded-xl border border-transparent p-4 transition-colors duration-300',
+              highlighted
+                ? 'border-amber-500/30 bg-amber-500/[0.06] ring-1 ring-amber-500/20'
+                : 'hover:bg-zinc-900/40',
             )}
           >
             {chunk.heading ? (
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 {chunk.heading}
               </p>
             ) : null}
             {chunk.contentType === 'TABLE' ? (
-              <pre className="whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs text-slate-700">
+              <pre className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 font-mono text-xs text-zinc-300">
                 {chunk.content}
               </pre>
             ) : (
-              <div className="prose prose-sm max-w-none text-slate-700">
+              <div className="prose prose-sm prose-invert max-w-none prose-p:text-zinc-300 prose-headings:text-zinc-100 prose-strong:text-zinc-100 prose-a:text-zinc-100">
                 <ReactMarkdown>{chunk.content}</ReactMarkdown>
               </div>
             )}

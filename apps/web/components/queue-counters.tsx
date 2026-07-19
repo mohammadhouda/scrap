@@ -39,13 +39,13 @@ export function QueueCounters() {
 
   if (!counts && !error) return <Loading label="Loading queue status..." />;
   if (error && !counts) {
-    return <p className="text-sm text-red-600">Could not load queue status.</p>;
+    return <p className="text-sm text-red-400">Could not load queue status.</p>;
   }
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       {counts?.map((q) => (
-        <Card key={q.name}>
+        <Card key={q.name} className="hover:border-zinc-700">
           <CardHeader>
             <CardTitle className="capitalize">{q.name}</CardTitle>
           </CardHeader>

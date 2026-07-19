@@ -3,8 +3,13 @@ import { cn } from '@/lib/utils';
 
 export function Loading({ label = 'Loading...', className }: { label?: string; className?: string }) {
   return (
-    <div className={cn('flex items-center justify-center gap-2 py-12 text-sm text-slate-500', className)}>
-      <Loader2 className="h-4 w-4 animate-spin" />
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center gap-3 py-16 text-sm text-zinc-500',
+        className,
+      )}
+    >
+      <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
       {label}
     </div>
   );
@@ -14,11 +19,13 @@ export function Empty({ label = 'Nothing here yet.', className }: { label?: stri
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center gap-2 py-12 text-sm text-slate-500',
+        'flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-zinc-800 py-16 text-sm text-zinc-500',
         className,
       )}
     >
-      <Inbox className="h-6 w-6 text-slate-300" />
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800/60">
+        <Inbox className="h-5 w-5 text-zinc-500" />
+      </div>
       {label}
     </div>
   );
@@ -28,11 +35,13 @@ export function ErrorState({ message, className }: { message: string; className?
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 py-8 text-sm text-red-700',
+        'flex flex-col items-center justify-center gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.04] py-12 text-sm text-red-400',
         className,
       )}
     >
-      <AlertTriangle className="h-5 w-5" />
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
+        <AlertTriangle className="h-5 w-5 text-red-400" />
+      </div>
       {message}
     </div>
   );

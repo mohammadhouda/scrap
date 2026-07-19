@@ -4,16 +4,16 @@ export function VersionDiff({ before, after }: { before: string; after: string }
   const parts = diffWords(before, after);
 
   return (
-    <pre className="whitespace-pre-wrap rounded-md border border-slate-200 bg-white p-4 text-xs leading-relaxed">
+    <pre className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 font-mono text-xs leading-relaxed text-zinc-300">
       {parts.map((part, i) => (
         <span
           key={i}
           className={
             part.added
-              ? 'bg-green-100 text-green-800'
+              ? 'bg-emerald-500/15 text-emerald-300'
               : part.removed
-                ? 'bg-red-100 text-red-800 line-through'
-                : 'text-slate-700'
+                ? 'bg-red-500/15 text-red-300 line-through decoration-red-400/60'
+                : undefined
           }
         >
           {part.value}
