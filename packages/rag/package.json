@@ -16,8 +16,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@langchain/textsplitters": "^0.1.0",
     "@scraper/db": "workspace:*",
-    "@scraper/shared": "workspace:*"
+    "@scraper/shared": "workspace:*",
+    "js-tiktoken": "^1.0.15",
+    "openai": "^4.68.4"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
