@@ -49,7 +49,9 @@ function toPromptSources(results: RetrievedChunk[]): PromptSource[] {
   }));
 }
 
-export function createAsker(options: AskerOptions) {
+export type Asker = (question: string, options?: AskOptions) => Promise<AskResult>;
+
+export function createAsker(options: AskerOptions): Asker {
   const model = options.model ?? process.env.LLM_MODEL ?? 'gpt-5.5';
 
   // Lazy, same rationale as embed.ts: don't crash worker/API startup just

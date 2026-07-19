@@ -64,6 +64,11 @@ services:
       dockerfile: docker/Dockerfile.web
     environment:
       PORT: 3000
+      # Server components run inside the container and must use Docker's
+      # internal DNS; the browser runs on the host and needs the published
+      # port instead. NEXT_PUBLIC_* is inlined at build time, so this only
+      # takes effect on the next image rebuild.
+      API_URL: http://api:4000
       NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-4000}
     ports:
       - "${WEB_PORT:-3000}:3000"
