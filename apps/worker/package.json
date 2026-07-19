@@ -6,9 +6,9 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "crawl": "tsx src/scripts/enqueue-crawl.ts",
+    "crawl": "dotenv -e ../../.env -- tsx src/scripts/enqueue-crawl.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
