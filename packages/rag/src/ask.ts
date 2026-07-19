@@ -9,6 +9,7 @@ export interface Citation {
   url: string;
   title: string | null;
   chunkId: string;
+  pageId: string;
 }
 
 export interface AskResult {
@@ -36,7 +37,13 @@ async function* singleChunkStream(text: string): AsyncIterable<string> {
 }
 
 function toCitations(results: RetrievedChunk[]): Citation[] {
-  return results.map((chunk, i) => ({ n: i + 1, url: chunk.url, title: chunk.title, chunkId: chunk.chunkId }));
+  return results.map((chunk, i) => ({
+    n: i + 1,
+    url: chunk.url,
+    title: chunk.title,
+    chunkId: chunk.chunkId,
+    pageId: chunk.pageId,
+  }));
 }
 
 function toPromptSources(results: RetrievedChunk[]): PromptSource[] {

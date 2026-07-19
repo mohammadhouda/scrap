@@ -186,6 +186,26 @@ describe('GET /pages', () => {
   });
 });
 
+describe('GET /pages/:id', () => {
+  it('404s for an unknown page', async () => {
+    pageFindUnique.mockResolvedValue(null);
+    const { app } = await buildTestApp();
+
+    const response = await app.inject({ method: 'GET', url: '/pages/missing' });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('returns the page with its source name', async () => {
+    pageFindUnique.mockResolvedValue({ id: 'p1', url: 'https://x.com', source: { name: 'quotes' } });
+    const { app } = await buildTestApp();
+
+    const response = await app.inject({ method: 'GET', url: '/pages/p1' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: 'p1', url: 'https://x.com', source: { name: 'quotes' } });
+  });
+});
+
 describe('GET /pages/:id/versions', () => {
   it('404s for an unknown page', async () => {
     pageFindUnique.mockResolvedValue(null);
@@ -195,14 +215,21 @@ describe('GET /pages/:id/versions', () => {
     expect(response.statusCode).toBe(404);
   });
 
-  it('returns version history for a known page', async () => {
-    pageFindUnique.mockResolvedValue({ id: 'p1', versions: [{ version: 2 }, { version: 1 }] });
+  it('returns version history with chunks for a known page', async () => {
+    pageFindUnique.mockResolvedValue({
+      id: 'p1',
+      versions: [
+        { version: 2, chunks: [{ id: 'c1', index: 0, heading: null, content: 'hi', contentType: 'PROSE' }] },
+        { version: 1, chunks: [] },
+      ],
+    });
     const { app } = await buildTestApp();
 
     const response = await app.inject({ method: 'GET', url: '/pages/p1/versions' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual([{ version: 2 }, { version: 1 }]);
+    expect(response.json()).toHaveLength(2);
+    expect(response.json()[0].chunks).toHaveLength(1);
   });
 });
 
@@ -242,16 +269,20 @@ describe('POST /ask', () => {
     const { app, ask } = await buildTestApp();
     ask.mockResolvedValue({
       answerStream: fakeStream(),
-      citations: [{ n: 1, url: 'https://x.com', title: 'X', chunkId: 'c1' }],
+      citations: [{ n: 1, url: 'https://x.com', title: 'X', chunkId: 'c1', pageId: 'p1' }],
     });
 
     const response = await app.inject({
       method: 'POST',
       url: '/ask',
+      headers: { origin: 'http://localhost:3000' },
       payload: { question: 'What is the answer?' },
     });
 
     expect(response.headers['content-type']).toContain('text/event-stream');
+    // hijack() bypasses @fastify/cors's onSend hook, so this header is set
+    // by hand in the route -- regression test for that.
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3000');
     expect(response.payload).toContain('event: citations');
     expect(response.payload).toContain('"url":"https://x.com"');
     expect(response.payload).toContain('event: token');

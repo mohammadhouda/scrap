@@ -9,6 +9,18 @@ const listQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// Selecting chunk columns explicitly (not `include: true`) to leave out the
+// raw embedding vector -- the UI only needs it for highlighting, not the
+// 1536-float payload.
+const chunkSelect = {
+  id: true,
+  index: true,
+  heading: true,
+  content: true,
+  contentType: true,
+  tokenCount: true,
+} as const;
+
 export function pagesRoutes(): FastifyPluginAsync {
   return async (rawApp) => {
     const app = rawApp.withTypeProvider<ZodTypeProvider>();
@@ -31,13 +43,31 @@ export function pagesRoutes(): FastifyPluginAsync {
       return { items, total, page, pageSize };
     });
 
+    app.get('/pages/:id', { schema: { params: z.object({ id: z.string() }) } }, async (request, reply) => {
+      const page = await prisma.page.findUnique({
+        where: { id: request.params.id },
+        include: { source: { select: { name: true } } },
+      });
+
+      if (!page) {
+        return reply.code(404).send({ error: 'page not found' });
+      }
+
+      return page;
+    });
+
     app.get(
       '/pages/:id/versions',
       { schema: { params: z.object({ id: z.string() }) } },
       async (request, reply) => {
         const page = await prisma.page.findUnique({
           where: { id: request.params.id },
-          include: { versions: { orderBy: { version: 'desc' } } },
+          include: {
+            versions: {
+              orderBy: { version: 'desc' },
+              include: { chunks: { select: chunkSelect, orderBy: { index: 'asc' } } },
+            },
+          },
         });
 
         if (!page) {

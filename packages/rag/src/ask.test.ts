@@ -21,7 +21,15 @@ vi.mock('openai', () => {
 const { createAsker } = await import('./ask.js');
 
 function chunk(id: string, sourceId: string, url: string): RetrievedChunk {
-  return { chunkId: id, content: `content for ${id}`, heading: 'H', url, title: `Title ${id}`, sourceId };
+  return {
+    chunkId: id,
+    pageId: `page-${id}`,
+    content: `content for ${id}`,
+    heading: 'H',
+    url,
+    title: `Title ${id}`,
+    sourceId,
+  };
 }
 
 async function* fakeOpenAiStream(parts: string[]) {
@@ -60,7 +68,7 @@ describe('createAsker', () => {
     const result = await ask('What is X?');
 
     expect(result.citations).toEqual([
-      { n: 1, url: 'https://a.com/1', title: 'Title c1', chunkId: 'c1' },
+      { n: 1, url: 'https://a.com/1', title: 'Title c1', chunkId: 'c1', pageId: 'page-c1' },
     ]);
     expect(await drain(result.answerStream)).toBe('The answer is [1].');
   });

@@ -11,7 +11,15 @@ vi.mock('./retrieve.js', () => ({ semanticSearch, keywordSearch }));
 const { hybridSearch } = await import('./hybrid.js');
 
 function chunk(id: string): RetrievedChunk {
-  return { chunkId: id, content: `content ${id}`, heading: null, url: `https://x.com/${id}`, title: null, sourceId: 's1' };
+  return {
+    chunkId: id,
+    pageId: `page-${id}`,
+    content: `content ${id}`,
+    heading: null,
+    url: `https://x.com/${id}`,
+    title: null,
+    sourceId: 's1',
+  };
 }
 
 const embedTexts = vi.fn();

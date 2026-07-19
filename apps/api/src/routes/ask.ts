@@ -31,10 +31,15 @@ export function askRoutes(ask: Asker): FastifyPluginAsync {
       }
 
       reply.hijack();
+      // hijack() bypasses Fastify's onSend hooks, which is where @fastify/cors
+      // normally injects these headers -- set them manually or the browser
+      // blocks reading the (successfully streamed) response.
+      const origin = request.headers.origin;
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        ...(origin ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}),
       });
 
       try {

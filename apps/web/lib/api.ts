@@ -21,6 +21,15 @@ export interface Page {
   source: { name: string };
 }
 
+export interface Chunk {
+  id: string;
+  index: number;
+  heading: string | null;
+  content: string;
+  contentType: 'PROSE' | 'TABLE' | 'CODE' | 'LIST';
+  tokenCount: number;
+}
+
 export interface PageVersion {
   id: string;
   pageId: string;
@@ -32,10 +41,12 @@ export interface PageVersion {
   language: string | null;
   tables: unknown;
   fetchedAt: string;
+  chunks: Chunk[];
 }
 
 export interface SearchResult {
   chunkId: string;
+  pageId: string;
   content: string;
   heading: string | null;
   url: string;
@@ -50,6 +61,7 @@ export interface Citation {
   url: string;
   title: string | null;
   chunkId: string;
+  pageId: string;
 }
 
 export interface QueueCount {
@@ -141,6 +153,10 @@ export function getPages(params: { source?: string; page?: number; pageSize?: nu
   if (params.pageSize) qs.set('pageSize', String(params.pageSize));
   const suffix = qs.toString() ? `?${qs}` : '';
   return apiFetch<PagedResult<Page>>(`/pages${suffix}`);
+}
+
+export function getPage(id: string): Promise<Page> {
+  return apiFetch(`/pages/${id}`);
 }
 
 export function getPageVersions(id: string): Promise<PageVersion[]> {

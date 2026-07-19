@@ -3,6 +3,7 @@ import type { Embedder } from './embed.js';
 
 export interface RetrievedChunk {
   chunkId: string;
+  pageId: string;
   content: string;
   heading: string | null;
   url: string;
@@ -33,7 +34,7 @@ export async function semanticSearch(
   const topK = options.topK ?? DEFAULT_TOP_K;
 
   return prisma.$queryRaw<RetrievedChunk[]>`
-    SELECT c.id as "chunkId", c.content, c.heading, p.url, pv.title, p."sourceId"
+    SELECT c.id as "chunkId", p.id as "pageId", c.content, c.heading, p.url, pv.title, p."sourceId"
     FROM "Chunk" c
     JOIN "PageVersion" pv ON pv.id = c."pageVersionId"
     JOIN "Page" p ON p.id = pv."pageId"
@@ -50,7 +51,7 @@ export async function keywordSearch(
   const topK = options.topK ?? DEFAULT_TOP_K;
 
   return prisma.$queryRaw<RetrievedChunk[]>`
-    SELECT c.id as "chunkId", c.content, c.heading, p.url, pv.title, p."sourceId"
+    SELECT c.id as "chunkId", p.id as "pageId", c.content, c.heading, p.url, pv.title, p."sourceId"
     FROM "Chunk" c
     JOIN "PageVersion" pv ON pv.id = c."pageVersionId"
     JOIN "Page" p ON p.id = pv."pageId"

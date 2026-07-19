@@ -11,6 +11,7 @@ const { semanticSearch, keywordSearch } = await import('./retrieve.js');
 const sampleRows = [
   {
     chunkId: 'c1',
+    pageId: 'page-1',
     content: 'some content',
     heading: null,
     url: 'https://example.com',
