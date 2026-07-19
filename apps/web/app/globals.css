@@ -31,3 +31,23 @@
     border: 2px solid rgb(9 9 11);
   }
 }
+
+@layer components {
+  /* Inline blinking cursor at the end of a streaming AI answer -- targets
+     the last leaf (paragraph, or last list item inside the last list) so it
+     sits right after the most recent text, not after the whole block. */
+  .stream-cursor > *:last-child:not(ul):not(ol)::after,
+  .stream-cursor > ul:last-child > li:last-child::after,
+  .stream-cursor > ol:last-child > li:last-child::after {
+    content: '▌';
+    margin-left: 0.15em;
+    color: rgb(113 113 122);
+    animation: stream-cursor-blink 1s steps(1) infinite;
+  }
+
+  @keyframes stream-cursor-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+}

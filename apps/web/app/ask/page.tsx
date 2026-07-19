@@ -6,7 +6,7 @@ import { Loader2, Send, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { CitationText } from '@/components/citation-text';
+import { AnswerMarkdown } from '@/components/answer-markdown';
 import { readSseStream } from '@/lib/sse';
 import type { Citation } from '@/lib/api';
 
@@ -14,6 +14,7 @@ type Status = 'idle' | 'streaming' | 'done' | 'error';
 
 export default function AskPage() {
   const [question, setQuestion] = useState('');
+  const [askedQuestion, setAskedQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [citations, setCitations] = useState<Citation[]>([]);
   const [status, setStatus] = useState<Status>('idle');
@@ -23,6 +24,7 @@ export default function AskPage() {
     e.preventDefault();
     if (!question.trim() || status === 'streaming') return;
 
+    setAskedQuestion(question.trim());
     setAnswer('');
     setCitations([]);
     setErrorMessage('');
@@ -61,16 +63,20 @@ export default function AskPage() {
     }
   }
 
+  const idle = status === 'idle' && !answer;
+
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col items-center gap-3 pt-2 text-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-400">
-          <Sparkles className="h-3 w-3" />
-          Grounded in your crawled sources
-        </span>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">Ask a question</h1>
-        <p className="text-zinc-400">Every claim in the answer is cited — click a number to verify it.</p>
-      </div>
+      {idle ? (
+        <div className="flex flex-col items-center gap-3 pt-2 text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-400">
+            <Sparkles className="h-3 w-3" />
+            Grounded in your crawled sources
+          </span>
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">Ask a question</h1>
+          <p className="text-zinc-400">Every claim in the answer is cited — click a number to verify it.</p>
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-2xl items-center gap-2">
         <Input
@@ -90,7 +96,13 @@ export default function AskPage() {
         </Button>
       </form>
 
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+        {askedQuestion ? (
+          <p className="self-end rounded-2xl rounded-tr-sm bg-zinc-800/80 px-4 py-2 text-sm text-zinc-200">
+            {askedQuestion}
+          </p>
+        ) : null}
+
         {status === 'error' ? (
           <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-4 text-sm text-red-400">
             {errorMessage}
@@ -98,22 +110,34 @@ export default function AskPage() {
         ) : null}
 
         {status === 'streaming' && !answer ? (
-          <div className="flex items-center gap-1.5 px-1 text-sm text-zinc-500">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500 [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500 [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500" />
-            <span className="ml-1">Thinking...</span>
+          <div className="flex items-center gap-2 px-1 text-sm text-zinc-500">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-zinc-900">
+              <Sparkles className="h-3 w-3" />
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500" />
+            </span>
           </div>
         ) : null}
 
         {answer ? (
-          <Card className="animate-slide-up">
-            <CardContent className="pt-5">
-              <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-200">
-                <CitationText text={answer} citations={citations} />
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex animate-slide-up flex-col gap-2">
+            <div className="flex items-center gap-2 px-1">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-zinc-900">
+                <Sparkles className="h-3 w-3" />
+              </span>
+              <span className="text-xs font-medium text-zinc-500">
+                {status === 'streaming' ? 'Answering…' : 'Answer'}
+              </span>
+            </div>
+            <Card>
+              <CardContent className="pt-5">
+                <AnswerMarkdown text={answer} citations={citations} streaming={status === 'streaming'} />
+              </CardContent>
+            </Card>
+          </div>
         ) : null}
 
         {citations.length > 0 ? (
