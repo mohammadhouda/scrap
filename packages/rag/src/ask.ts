@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { Fetch } from 'openai/core';
 import type { Embedder } from './embed.js';
 import { hybridSearch } from './hybrid.js';
 import { keywordSearch, semanticSearch, type RetrievedChunk, type SearchOptions } from './retrieve.js';
@@ -65,7 +66,11 @@ export function createAsker(options: AskerOptions): Asker {
   // because ANTHROPIC_API_KEY-style config isn't set yet.
   let client: OpenAI | undefined;
   function getClient(): OpenAI {
-    client ??= new OpenAI({ apiKey: options.apiKey ?? process.env.OPENAI_API_KEY });
+    // Force Node's native (undici) fetch instead of the SDK's default
+    client ??= new OpenAI({
+      apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+      fetch: globalThis.fetch as unknown as Fetch,
+    });
     return client;
   }
 

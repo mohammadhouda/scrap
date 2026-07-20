@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { Fetch } from 'openai/core';
 
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 5;
@@ -7,8 +8,27 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Retryable errors are those that are likely to succeed if retried, such as rate limits
+// or transient network errors. See https://platform.openai.com/docs/guides/error-handling.
+const RETRYABLE_ERROR_CODES = new Set([
+  'ERR_STREAM_PREMATURE_CLOSE',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EPIPE',
+]);
+
 function isRetryable(err: unknown): boolean {
-  return err instanceof OpenAI.APIError && (err.status === 429 || (err.status ?? 0) >= 500);
+  if (err instanceof OpenAI.APIError) {
+    return err.status === 429 || (err.status ?? 0) >= 500;
+  }
+  if (err instanceof Error) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return err.name === 'FetchError' || (code !== undefined && RETRYABLE_ERROR_CODES.has(code));
+  }
+  return false;
 }
 
 export interface EmbedderOptions {
@@ -26,7 +46,14 @@ export function createEmbedder(options: EmbedderOptions = {}): Embedder {
   // scrape/discover jobs even before embeddings are configured.
   let client: OpenAI | undefined;
   function getClient(): OpenAI {
-    client ??= new OpenAI({ apiKey: options.apiKey ?? process.env.OPENAI_API_KEY });
+    // Force Node's native (undici) fetch instead of the SDK's default
+    // node-fetch@2, which has a long-standing bug where a proxy/VPN/AV TLS
+    // inspection layer truncating the gzip response body surfaces as an
+    // unrecoverable `ERR_STREAM_PREMATURE_CLOSE` on every attempt.
+    client ??= new OpenAI({
+      apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
+      fetch: globalThis.fetch as unknown as Fetch,
+    });
     return client;
   }
 

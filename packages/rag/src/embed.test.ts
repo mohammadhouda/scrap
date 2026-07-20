@@ -83,6 +83,23 @@ describe('createEmbedder', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it('retries on a premature-close network error and succeeds', async () => {
+    vi.useFakeTimers();
+    const fetchError = new Error('Invalid response body: Premature close');
+    fetchError.name = 'FetchError';
+    (fetchError as NodeJS.ErrnoException).code = 'ERR_STREAM_PREMATURE_CLOSE';
+    create.mockRejectedValueOnce(fetchError).mockResolvedValueOnce(embeddingResponse(1));
+    const embedTexts = createEmbedder({ apiKey: 'test-key' });
+
+    const pending = embedTexts(['a']);
+    await vi.advanceTimersByTimeAsync(5000);
+    const result = await pending;
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
   it('re-sorts embeddings by index in case the API returns them out of order', async () => {
     create.mockResolvedValue({
       ...embeddingResponse(0),
