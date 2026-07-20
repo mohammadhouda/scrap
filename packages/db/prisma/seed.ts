@@ -22,13 +22,14 @@ const sources = [
     ratePerSecond: 1,
   },
   {
-    name: 'books',
-    seedUrl: 'http://books.toscrape.com/',
-    allowPatterns: ['^http://books\\.toscrape\\.com/'],
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript
+    name: 'mdn-js',
+    seedUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
+    allowPatterns: ['^https://developer\\.mozilla\\.org/en-US/docs/Web/JavaScript'],
     denyPatterns: [] as string[],
     renderJs: false,
-    maxDepth: 60,
-    ratePerSecond: 3,
+    maxDepth: 15,
+    ratePerSecond: 1,
   },
 ];
 

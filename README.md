@@ -177,14 +177,11 @@ on every push.
 
 ## Target sites
 
-Sandbox sites purpose-built for scraping practice — no robots.txt/ToS
-ambiguity:
-
 | Source | Type | Notes |
 |---|---|---|
-| `quotes.toscrape.com` | Static | baseline |
-| `quotes.toscrape.com/js` | JS-rendered | forces the Playwright fetch path |
-| `books.toscrape.com` | 500+ pages | pagination + per-book listing pages |
+| `quotes.toscrape.com` | Static | sandbox site, purpose-built for scraping practice — no robots.txt/ToS ambiguity |
+| `quotes.toscrape.com/js` | JS-rendered | sandbox site; forces the Playwright fetch path |
+| `developer.mozilla.org/en-US/docs/Web/JavaScript` | 500+ pages | real technical reference content (headings, code blocks, tables); robots.txt allows crawling, CC-BY-SA licensed |
 
 See [`docs/ethics.md`](docs/ethics.md) for the full robots.txt/rate-limit
 review.
