@@ -6,7 +6,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./crawl-run": {
+      "types": "./dist/crawl-run.d.ts",
+      "default": "./dist/crawl-run.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

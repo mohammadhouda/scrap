@@ -1,9 +1,10 @@
 import { QUEUE_NAMES } from '@scraper/shared';
+import { settleScrapeForRun } from '@scraper/scraper';
 import { buildDiscoverWorker } from './discover-worker.js';
 import { buildIndexWorker } from './index-worker.js';
 import { createQueues } from './queues.js';
 import { createRedisConnection } from './redis.js';
-import { buildScrapeWorker } from './worker.js';
+import { buildScrapeWorker, type ScrapeJobData } from './worker.js';
 
 const connection = createRedisConnection();
 const queues = createQueues(connection);
@@ -20,6 +21,20 @@ for (const worker of workers) {
   });
   worker.on('failed', (job, err) => {
     console.error(`job ${job?.id} on queue "${worker.name}" failed`, err);
+
+    // When a *scrape* job exhausts all its retries, it's terminally failed —
+    // settle the crawl run so its outstanding counter can still reach zero.
+    // (A DelayedError from rate-limiting doesn't emit 'failed', so deferrals
+    // aren't miscounted here.)
+    if (worker.name === QUEUE_NAMES.scrape && job) {
+      const attemptsAllowed = job.opts.attempts ?? 1;
+      const data = job.data as ScrapeJobData;
+      if (job.attemptsMade >= attemptsAllowed && data.crawlRunId) {
+        void settleScrapeForRun(connection, data.crawlRunId, data.url, 'failed').catch((e: unknown) =>
+          console.error(`failed to settle crawl run ${data.crawlRunId}`, e),
+        );
+      }
+    }
   });
   worker.on('error', (err) => {
     console.error(`worker error on queue "${worker.name}"`, err);

@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import type { Redis } from 'ioredis';
 import { z } from 'zod';
 import { prisma } from '@scraper/db';
+import { reserveUrlForRun, scrapeJobId, startCrawlRun } from '@scraper/scraper/crawl-run';
 import { sourceSchema } from '@scraper/shared';
 import { requireAdmin } from '../auth.js';
 import type { Queues } from '../queues.js';
@@ -19,7 +21,18 @@ const sourceResponseSchema = z.object({
   createdAt: z.date(),
 });
 
-export function sourcesRoutes(queues: Queues): FastifyPluginAsync {
+const crawlRunResponseSchema = z.object({
+  id: z.string(),
+  sourceId: z.string(),
+  status: z.enum(['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED']),
+  startedAt: z.date(),
+  finishedAt: z.date().nullable(),
+  pagesQueued: z.number(),
+  pagesDone: z.number(),
+  pagesFailed: z.number(),
+});
+
+export function sourcesRoutes(queues: Queues, redis?: Redis): FastifyPluginAsync {
   return async (rawApp) => {
     const app = rawApp.withTypeProvider<ZodTypeProvider>();
 
@@ -27,6 +40,32 @@ export function sourcesRoutes(queues: Queues): FastifyPluginAsync {
       '/sources',
       { schema: { response: { 200: z.array(sourceResponseSchema) } } },
       async () => prisma.source.findMany({ orderBy: { createdAt: 'desc' } }),
+    );
+
+    app.get(
+      '/sources/:id/crawls',
+      {
+        schema: {
+          params: z.object({ id: z.string() }),
+          querystring: z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) }),
+          response: {
+            200: z.array(crawlRunResponseSchema),
+            404: z.object({ error: z.string() }),
+          },
+        },
+      },
+      async (request, reply) => {
+        const source = await prisma.source.findUnique({ where: { id: request.params.id } });
+        if (!source) {
+          return reply.code(404).send({ error: 'source not found' });
+        }
+
+        return prisma.crawlRun.findMany({
+          where: { sourceId: source.id },
+          orderBy: { startedAt: 'desc' },
+          take: request.query.limit,
+        });
+      },
     );
 
     app.post(
@@ -48,7 +87,7 @@ export function sourcesRoutes(queues: Queues): FastifyPluginAsync {
         schema: {
           params: z.object({ id: z.string() }),
           response: {
-            202: z.object({ enqueued: z.literal(true) }),
+            202: z.object({ enqueued: z.literal(true), crawlRunId: z.string().optional() }),
             404: z.object({ error: z.string() }),
           },
         },
@@ -57,6 +96,19 @@ export function sourcesRoutes(queues: Queues): FastifyPluginAsync {
         const source = await prisma.source.findUnique({ where: { id: request.params.id } });
         if (!source) {
           return reply.code(404).send({ error: 'source not found' });
+        }
+
+        // With Redis available, open a tracked CrawlRun so progress/completion
+        // is observable; the seed URL is reserved for the run before enqueue.
+        if (redis) {
+          const crawlRunId = await startCrawlRun(source.id);
+          await reserveUrlForRun(redis, crawlRunId, source.seedUrl);
+          await queues.scrape.add(
+            'scrape',
+            { sourceId: source.id, url: source.seedUrl, depth: 0, crawlRunId },
+            { jobId: scrapeJobId(crawlRunId, source.seedUrl) },
+          );
+          return reply.code(202).send({ enqueued: true, crawlRunId });
         }
 
         await queues.scrape.add('scrape', { sourceId: source.id, url: source.seedUrl, depth: 0 });

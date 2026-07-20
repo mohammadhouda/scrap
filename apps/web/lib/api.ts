@@ -64,6 +64,19 @@ export interface Citation {
   pageId: string;
 }
 
+export type CrawlStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+
+export interface CrawlRun {
+  id: string;
+  sourceId: string;
+  status: CrawlStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  pagesQueued: number;
+  pagesDone: number;
+  pagesFailed: number;
+}
+
 export interface QueueCount {
   name: 'scrape' | 'discover' | 'index';
   counts: {
@@ -137,6 +150,10 @@ export async function apiFetch<T>(
 
 export function getSources(): Promise<Source[]> {
   return apiFetch('/sources');
+}
+
+export function getCrawls(sourceId: string, limit = 10): Promise<CrawlRun[]> {
+  return apiFetch(`/sources/${sourceId}/crawls?limit=${limit}`);
 }
 
 export interface PagedResult<T> {

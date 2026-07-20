@@ -53,7 +53,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
-  await app.register(sourcesRoutes(deps.queues));
+  await app.register(sourcesRoutes(deps.queues, deps.redis));
   await app.register(pagesRoutes());
   await app.register(adminRoutes(deps.queues));
 

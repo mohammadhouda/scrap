@@ -1,4 +1,5 @@
 import { prisma } from '@scraper/db';
+import { reserveUrlForRun, scrapeJobId, startCrawlRun } from '@scraper/scraper';
 import { createQueues } from '../queues.js';
 import { createRedisConnection } from '../redis.js';
 
@@ -21,10 +22,16 @@ async function main() {
 
   try {
     for (const source of sources) {
-      // No jobId here: this is an explicit, operator-triggered (re-)crawl, so
-      // it should always run even if the seed URL was already visited.
-      await queues.scrape.add('scrape', { sourceId: source.id, url: source.seedUrl, depth: 0 });
-      console.log(`enqueued seed crawl for "${source.name}": ${source.seedUrl}`);
+      // Tracked run so operator-triggered crawls show progress/completion too.
+      // The per-run jobId keeps this crawl independent of any concurrent run.
+      const crawlRunId = await startCrawlRun(source.id);
+      await reserveUrlForRun(connection, crawlRunId, source.seedUrl);
+      await queues.scrape.add(
+        'scrape',
+        { sourceId: source.id, url: source.seedUrl, depth: 0, crawlRunId },
+        { jobId: scrapeJobId(crawlRunId, source.seedUrl) },
+      );
+      console.log(`enqueued seed crawl for "${source.name}" (run ${crawlRunId}): ${source.seedUrl}`);
     }
   } finally {
     await connection.quit();

@@ -1,16 +1,30 @@
-import { getSources } from '@/lib/api';
+import { getCrawls, getSources, type CrawlRun } from '@/lib/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ErrorState, Empty } from '@/components/ui/state';
 import { SourceCreateForm } from '@/components/admin/source-create-form';
 import { StartCrawlButton } from '@/components/admin/start-crawl-button';
+import { CrawlStatusCell } from '@/components/admin/crawl-status';
 
 export default async function AdminSourcesPage() {
   let sources: Awaited<ReturnType<typeof getSources>> = [];
   let error: string | null = null;
+  const latestRunBySource = new Map<string, CrawlRun>();
 
   try {
     sources = await getSources();
+    // Fetch the most recent crawl run for each source (best-effort — a source
+    // with no runs or a transient error just shows "never crawled").
+    await Promise.all(
+      sources.map(async (source) => {
+        try {
+          const [latest] = await getCrawls(source.id, 1);
+          if (latest) latestRunBySource.set(source.id, latest);
+        } catch {
+          // ignore per-source crawl-history failures
+        }
+      }),
+    );
   } catch {
     error = 'Could not load sources.';
   }
@@ -36,6 +50,7 @@ export default async function AdminSourcesPage() {
               <TableHead>Seed URL</TableHead>
               <TableHead>Depth</TableHead>
               <TableHead>Rate</TableHead>
+              <TableHead>Latest crawl</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -53,6 +68,9 @@ export default async function AdminSourcesPage() {
                 <TableCell className="max-w-xs truncate font-mono text-xs">{source.seedUrl}</TableCell>
                 <TableCell>{source.maxDepth}</TableCell>
                 <TableCell>{source.ratePerSecond}/s</TableCell>
+                <TableCell>
+                  <CrawlStatusCell run={latestRunBySource.get(source.id) ?? null} />
+                </TableCell>
                 <TableCell>
                   <StartCrawlButton sourceId={source.id} />
                 </TableCell>

@@ -10,6 +10,7 @@ import {
   filterLinks,
   persistVersion,
   playwrightFetch,
+  settleScrapeForRun,
 } from '@scraper/scraper';
 import { WORKER_CONCURRENCY } from './config.js';
 import type { Queues } from './queues.js';
@@ -18,6 +19,7 @@ export interface ScrapeJobData {
   sourceId: string;
   url: string;
   depth: number;
+  crawlRunId?: string;
 }
 
 export type ScrapeJobResult =
@@ -31,7 +33,7 @@ export async function processScrapeJob(
   queues: Queues,
   data: ScrapeJobData,
 ): Promise<ScrapeJobResult> {
-  const { url, sourceId, depth } = data;
+  const { url, sourceId, depth, crawlRunId } = data;
   const source = await prisma.source.findUniqueOrThrow({ where: { id: sourceId } });
 
   const robotsCheck = await checkRobots(connection, url);
@@ -79,7 +81,7 @@ export async function processScrapeJob(
     });
 
     if (filtered.length > 0) {
-      await queues.discover.add('links', { sourceId, urls: filtered, parentDepth: depth });
+      await queues.discover.add('links', { sourceId, urls: filtered, parentDepth: depth, crawlRunId });
     }
   }
 
@@ -99,6 +101,13 @@ export function buildScrapeWorker(connection: Redis, queues: Queues): Worker<Scr
         // DelayedError so BullMQ releases the slot instead of completing/failing.
         await job.moveToDelayed(Date.now() + result.defer, token);
         throw new DelayedError();
+      }
+
+      // Terminal success (versioned / unchanged / robots-skip) — settle the
+      // crawl-run counter. Terminal *failures* are settled in index.ts's
+      // 'failed' handler once retries are exhausted.
+      if (job.data.crawlRunId) {
+        await settleScrapeForRun(connection, job.data.crawlRunId, job.data.url, 'done');
       }
 
       return result;
