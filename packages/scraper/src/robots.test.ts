@@ -57,7 +57,7 @@ describe('checkRobots', () => {
     expect(result.crawlDelay).toBe(5);
   });
 
-  it('defaults to allowed when robots.txt cannot be fetched', async () => {
+  it('fails closed (disallowed) when robots.txt cannot be fetched', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -66,7 +66,41 @@ describe('checkRobots', () => {
     );
 
     const result = await checkRobots(redis, 'https://example.com/page');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe('unavailable');
+  });
+
+  it('fails closed on a 5xx robots.txt response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 503, text: async () => 'error' })),
+    );
+
+    const result = await checkRobots(redis, 'https://example.com/page');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe('unavailable');
+  });
+
+  it('treats a 404 robots.txt as allow-all', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 404, text: async () => 'Not Found' })),
+    );
+
+    const result = await checkRobots(redis, 'https://example.com/anything');
     expect(result.allowed).toBe(true);
+  });
+
+  it('does not re-fetch a transiently-failed robots.txt within the short cache window', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await checkRobots(redis, 'https://example.com/a');
+    await checkRobots(redis, 'https://example.com/b');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('caches the fetched robots.txt in redis', async () => {

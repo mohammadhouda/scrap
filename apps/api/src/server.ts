@@ -10,7 +10,7 @@ const queues = createQueues(connection);
 const embedTexts = createEmbedder();
 const ask = createAsker({ embedTexts });
 
-const app = await buildApp({ queues, embedTexts, ask });
+const app = await buildApp({ queues, embedTexts, ask, redis: connection });
 
 app.listen({ port, host: '0.0.0.0' }).catch((err) => {
   app.log.error(err);

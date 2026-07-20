@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Redis } from 'ioredis';
-import { acquireRateLimitSlot } from './rate-limit.js';
+import { checkRateLimit } from './rate-limit.js';
 
-// Mimics the Lua token-bucket script's math so the retry loop in
-// acquireRateLimitSlot can be exercised without a real Redis instance.
+// Mimics the Lua token-bucket script's math so checkRateLimit can be exercised
+// without a real Redis instance.
 function fakeRedisWithBucket(rate: number, burst: number): Redis {
   let tokens = burst;
   let ts = Date.now();
@@ -24,24 +24,21 @@ function fakeRedisWithBucket(rate: number, burst: number): Redis {
   } as unknown as Redis;
 }
 
-describe('acquireRateLimitSlot', () => {
-  it('resolves immediately when a token is available', async () => {
+describe('checkRateLimit', () => {
+  it('returns 0 when a token is available', async () => {
     const redis = fakeRedisWithBucket(1, 1);
-    await expect(acquireRateLimitSlot(redis, 'example.com', 1)).resolves.toBeUndefined();
+    await expect(checkRateLimit(redis, 'example.com', 1)).resolves.toBe(0);
     expect(redis.eval).toHaveBeenCalledTimes(1);
   });
 
-  it('retries until a token frees up', async () => {
-    vi.useFakeTimers();
+  it('returns a positive wait (without consuming a token) once the bucket is drained', async () => {
     const redis = fakeRedisWithBucket(10, 1);
 
     // Drain the only token.
-    await acquireRateLimitSlot(redis, 'example.com', 10);
+    await expect(checkRateLimit(redis, 'example.com', 10)).resolves.toBe(0);
 
-    const pending = acquireRateLimitSlot(redis, 'example.com', 10);
-    await vi.advanceTimersByTimeAsync(200);
-    await expect(pending).resolves.toBeUndefined();
-
-    vi.useRealTimers();
+    // Next call has no token — should report a wait, not block.
+    const waitMs = await checkRateLimit(redis, 'example.com', 10);
+    expect(waitMs).toBeGreaterThan(0);
   });
 });

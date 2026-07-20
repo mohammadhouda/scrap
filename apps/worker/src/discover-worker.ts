@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { QUEUE_NAMES } from '@scraper/shared';
 import { sha256 } from '@scraper/scraper';
+import { WORKER_CONCURRENCY } from './config.js';
 import type { Queues } from './queues.js';
 
 export interface DiscoverJobData {
@@ -29,6 +30,6 @@ export function buildDiscoverWorker(connection: Redis, queues: Queues): Worker<D
   return new Worker<DiscoverJobData>(
     QUEUE_NAMES.discover,
     (job) => processDiscoverJob(queues, job.data),
-    { connection },
+    { connection, concurrency: WORKER_CONCURRENCY },
   );
 }

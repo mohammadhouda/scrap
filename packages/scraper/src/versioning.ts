@@ -1,4 +1,4 @@
-import { prisma } from '@scraper/db';
+import { Prisma, prisma } from '@scraper/db';
 import { processedPageSchema } from '@scraper/shared';
 import { sha256 } from './dedup.js';
 
@@ -10,6 +10,17 @@ export interface PersistVersionInput {
   title: string | null;
   tables?: Array<Array<Record<string, string>>>;
   language?: string | null;
+}
+
+export type PersistResult =
+  | { status: 'unchanged'; version: number; pageVersionId: string }
+  | { status: 'created'; version: number; pageVersionId: string };
+
+// The maximum number of attempts to persist a new version before giving up.
+const MAX_VERSION_ATTEMPTS = 4;
+
+function isVersionConflict(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
 export async function getLatestVersion(url: string) {
@@ -24,7 +35,7 @@ export async function touchLastSeen(url: string): Promise<void> {
   await prisma.page.update({ where: { url }, data: { lastSeenAt: new Date() } });
 }
 
-export async function persistVersion(input: PersistVersionInput) {
+export async function persistVersion(input: PersistVersionInput): Promise<PersistResult> {
   const processed = processedPageSchema.parse({
     cleanedMd: input.cleanedMd,
     title: input.title,
@@ -33,26 +44,46 @@ export async function persistVersion(input: PersistVersionInput) {
   });
 
   const urlHash = sha256(input.url);
+  const contentHash = sha256(processed.cleanedMd);
 
-  const page = await prisma.page.upsert({
-    where: { url: input.url },
-    create: { url: input.url, urlHash, sourceId: input.sourceId },
-    update: { lastSeenAt: new Date() },
-    include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
-  });
+  for (let attempt = 0; attempt < MAX_VERSION_ATTEMPTS; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // upsert both creates the Page on first sight and touches lastSeenAt
+        // on the unchanged path — no separate touchLastSeen round trip needed.
+        const page = await tx.page.upsert({
+          where: { url: input.url },
+          create: { url: input.url, urlHash, sourceId: input.sourceId },
+          update: { lastSeenAt: new Date() },
+          include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+        });
 
-  const nextVersion = (page.versions[0]?.version ?? 0) + 1;
+        const latest = page.versions[0];
+        if (latest?.contentHash === contentHash) {
+          return { status: 'unchanged', version: latest.version, pageVersionId: latest.id };
+        }
 
-  return prisma.pageVersion.create({
-    data: {
-      pageId: page.id,
-      version: nextVersion,
-      contentHash: sha256(processed.cleanedMd),
-      rawHtml: input.rawHtml,
-      cleanedMd: processed.cleanedMd,
-      title: processed.title,
-      tables: processed.tables,
-      language: processed.language,
-    },
-  });
+        const created = await tx.pageVersion.create({
+          data: {
+            pageId: page.id,
+            version: (latest?.version ?? 0) + 1,
+            contentHash,
+            rawHtml: input.rawHtml,
+            cleanedMd: processed.cleanedMd,
+            title: processed.title,
+            tables: processed.tables,
+            language: processed.language,
+          },
+        });
+
+        return { status: 'created', version: created.version, pageVersionId: created.id };
+      });
+    } catch (err) {
+      if (isVersionConflict(err) && attempt < MAX_VERSION_ATTEMPTS - 1) continue;
+      throw err;
+    }
+  }
+
+  // Unreachable: the loop either returns or throws on the final attempt.
+  throw new Error(`persistVersion: exhausted ${MAX_VERSION_ATTEMPTS} attempts for ${input.url}`);
 }

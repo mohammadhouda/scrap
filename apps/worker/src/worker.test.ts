@@ -15,35 +15,25 @@ vi.mock('@scraper/db', () => ({
   prisma: { source: { findUniqueOrThrow } },
 }));
 
-const {
-  checkRobots,
-  acquireRateLimitSlot,
-  cheerioFetch,
-  playwrightFetch,
-  getLatestVersion,
-  persistVersion,
-  touchLastSeen,
-} = vi.hoisted(() => ({
-  checkRobots: vi.fn(),
-  acquireRateLimitSlot: vi.fn(),
-  cheerioFetch: vi.fn(),
-  playwrightFetch: vi.fn(),
-  getLatestVersion: vi.fn(),
-  persistVersion: vi.fn(),
-  touchLastSeen: vi.fn(),
-}));
+const { checkRobots, checkRateLimit, cheerioFetch, playwrightFetch, persistVersion } = vi.hoisted(
+  () => ({
+    checkRobots: vi.fn(),
+    checkRateLimit: vi.fn(),
+    cheerioFetch: vi.fn(),
+    playwrightFetch: vi.fn(),
+    persistVersion: vi.fn(),
+  }),
+);
 
 vi.mock('@scraper/scraper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@scraper/scraper')>();
   return {
     ...actual,
     checkRobots,
-    acquireRateLimitSlot,
+    checkRateLimit,
     cheerioFetch,
     playwrightFetch,
-    getLatestVersion,
     persistVersion,
-    touchLastSeen,
   };
 });
 
@@ -72,7 +62,7 @@ describe('processScrapeJob', () => {
     vi.clearAllMocks();
     findUniqueOrThrow.mockResolvedValue(source);
     checkRobots.mockResolvedValue({ allowed: true });
-    acquireRateLimitSlot.mockResolvedValue(undefined);
+    checkRateLimit.mockResolvedValue(0);
     cheerioFetch.mockResolvedValue({
       html: '<html>hello</html>',
       discoveredLinks: ['https://example.com/next'],
@@ -81,8 +71,7 @@ describe('processScrapeJob', () => {
     cleanHtml.mockReturnValue({ cleanedMd: 'cleaned hello', title: 'Hello' });
     extractTables.mockReturnValue([]);
     detectLanguage.mockReturnValue('eng');
-    getLatestVersion.mockResolvedValue(undefined);
-    persistVersion.mockResolvedValue({ id: 'pv-1', version: 1 });
+    persistVersion.mockResolvedValue({ status: 'created', version: 1, pageVersionId: 'pv-1' });
   });
 
   it('skips fetching when robots.txt disallows the URL', async () => {
@@ -99,10 +88,23 @@ describe('processScrapeJob', () => {
     expect(cheerioFetch).not.toHaveBeenCalled();
   });
 
-  it('touches lastSeenAt and skips persistence when content is unchanged', async () => {
-    // Match the hash the worker will compute from cleanHtml's output.
-    const { sha256 } = await import('@scraper/scraper');
-    getLatestVersion.mockResolvedValue({ contentHash: sha256('cleaned hello') });
+  it('defers (without fetching) when the domain is rate-limited', async () => {
+    checkRateLimit.mockResolvedValue(1500);
+    const queues = fakeQueues();
+
+    const result = await processScrapeJob(connection, queues, {
+      sourceId: source.id,
+      url: 'https://example.com/page',
+      depth: 0,
+    });
+
+    expect(result).toEqual({ defer: 1500 });
+    expect(cheerioFetch).not.toHaveBeenCalled();
+    expect(persistVersion).not.toHaveBeenCalled();
+  });
+
+  it('skips discovery and indexing when persistVersion reports the content is unchanged', async () => {
+    persistVersion.mockResolvedValue({ status: 'unchanged', version: 3, pageVersionId: 'pv-3' });
 
     const queues = fakeQueues();
     const result = await processScrapeJob(connection, queues, {
@@ -112,8 +114,8 @@ describe('processScrapeJob', () => {
     });
 
     expect(result).toEqual({ unchanged: true });
-    expect(touchLastSeen).toHaveBeenCalledWith('https://example.com/page');
-    expect(persistVersion).not.toHaveBeenCalled();
+    expect(queues.discover.add).not.toHaveBeenCalled();
+    expect(queues.index.add).not.toHaveBeenCalled();
   });
 
   it('persists a new version and fans out discover + index jobs when content changed', async () => {

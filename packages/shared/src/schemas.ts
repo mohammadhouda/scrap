@@ -13,8 +13,12 @@ export const sourceSchema = z.object({
 
 export type SourceInput = z.infer<typeof sourceSchema>;
 
+// Cap query length: every semantic/hybrid search embeds `q` via OpenAI (costs
+// money), so an unbounded query is a cost-amplification vector.
+export const MAX_QUERY_LENGTH = 1000;
+
 export const searchQuerySchema = z.object({
-  q: z.string().min(1),
+  q: z.string().min(1).max(MAX_QUERY_LENGTH),
   mode: z.enum(['keyword', 'semantic', 'hybrid']).default('hybrid'),
   source: z.string().optional(),
 });

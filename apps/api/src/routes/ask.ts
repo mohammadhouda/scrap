@@ -3,9 +3,11 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { prisma } from '@scraper/db';
 import type { Asker } from '@scraper/rag';
+import { MAX_QUERY_LENGTH } from '@scraper/shared';
 
 const askBodySchema = z.object({
-  question: z.string().min(1),
+  // Bounded: the question is embedded and sent to the LLM, both metered by token.
+  question: z.string().min(1).max(MAX_QUERY_LENGTH),
   mode: z.enum(['keyword', 'semantic', 'hybrid']).optional(),
   source: z.string().optional(),
 });

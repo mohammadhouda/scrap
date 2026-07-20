@@ -8,7 +8,9 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { Redis } from 'ioredis';
 import type { Asker, Embedder } from '@scraper/rag';
+import { createRateLimiter } from './rate-limit.js';
 import { adminRoutes } from './routes/admin.js';
 import { askRoutes } from './routes/ask.js';
 import { pagesRoutes } from './routes/pages.js';
@@ -20,6 +22,8 @@ export interface AppDeps {
   queues: Queues;
   embedTexts: Embedder;
   ask: Asker;
+  /** Optional — enables the per-IP rate limiter on cost-bearing routes when present. */
+  redis?: Redis;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -28,7 +32,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  await app.register(cors);
+  // Restrict CORS to an explicit allowlist in production (CORS_ORIGIN, comma-
+  // separated). With none set, fall back to reflecting the request origin so
+  // local dev keeps working — but a deployed instance should always pin this.
+  const allowlist = (process.env.CORS_ORIGIN ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  await app.register(cors, {
+    origin: allowlist.length > 0 ? allowlist : true,
+  });
+
   await app.register(swagger, {
     openapi: {
       info: { title: 'Distributed RAG Scraper API', version: '0.1.0' },
@@ -41,9 +55,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   await app.register(sourcesRoutes(deps.queues));
   await app.register(pagesRoutes());
-  await app.register(searchRoutes(deps.embedTexts));
-  await app.register(askRoutes(deps.ask));
   await app.register(adminRoutes(deps.queues));
+
+  // The two routes that spend money per request get an IP rate limiter,
+  // scoped so admin/read routes are unaffected.
+  const rateLimit = createRateLimiter(deps.redis);
+  await app.register(async (metered) => {
+    metered.addHook('onRequest', rateLimit);
+    await metered.register(searchRoutes(deps.embedTexts));
+    await metered.register(askRoutes(deps.ask));
+  });
 
   return app;
 }

@@ -32,23 +32,24 @@ redis.call('EXPIRE', key, 3600)
 return waitMs
 `;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export async function acquireRateLimitSlot(
+/**
+ * Attempts to take one token from the per-domain bucket.
+ *
+ * Returns `0` when a token was consumed (proceed now), or the number of
+ * milliseconds to wait before a token will be available (no token consumed).
+ *
+ * This deliberately does NOT block. The old blocking version slept inside the
+ * BullMQ job handler, holding the worker's concurrency slot (and the job lock)
+ * while idle — so a domain rate-limited to 1 req/s would park every worker
+ * slot in `sleep()` and starve jobs for *other* domains. The caller now defers
+ * the job back to the queue (`job.moveToDelayed`) instead, freeing the slot.
+ */
+export async function checkRateLimit(
   redis: Redis,
   domain: string,
   ratePerSecond: number,
-): Promise<void> {
+): Promise<number> {
   const key = `ratelimit:${domain}`;
   const burst = Math.max(1, Math.ceil(ratePerSecond));
-
-  for (;;) {
-    const waitMs = Number(
-      await redis.eval(REFILL_SCRIPT, 1, key, ratePerSecond, burst, Date.now()),
-    );
-    if (waitMs <= 0) return;
-    await sleep(waitMs);
-  }
+  return Number(await redis.eval(REFILL_SCRIPT, 1, key, ratePerSecond, burst, Date.now()));
 }

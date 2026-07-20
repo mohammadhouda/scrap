@@ -3,6 +3,7 @@ import type { Redis } from 'ioredis';
 import { prisma } from '@scraper/db';
 import { chunkPage, clearChunksForVersions, createEmbedder, storeChunks } from '@scraper/rag';
 import { QUEUE_NAMES } from '@scraper/shared';
+import { WORKER_CONCURRENCY } from './config.js';
 
 export interface IndexJobData {
   pageVersionId: string;
@@ -41,5 +42,8 @@ export async function processIndexJob(data: IndexJobData) {
 }
 
 export function buildIndexWorker(connection: Redis): Worker<IndexJobData> {
-  return new Worker<IndexJobData>(QUEUE_NAMES.index, (job) => processIndexJob(job.data), { connection });
+  return new Worker<IndexJobData>(QUEUE_NAMES.index, (job) => processIndexJob(job.data), {
+    connection,
+    concurrency: WORKER_CONCURRENCY,
+  });
 }
