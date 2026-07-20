@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
   ApiError,
+  cancelCrawl as apiCancelCrawl,
   createSource as apiCreateSource,
   getQueueCounts,
   retryDlqJob as apiRetryDlqJob,
@@ -80,6 +81,20 @@ export async function startCrawlAction(sourceId: string): Promise<{ error?: stri
 
   revalidatePath('/admin/sources');
   return undefined;
+}
+
+export async function cancelCrawlAction(
+  crawlRunId: string,
+): Promise<{ error?: string; cancelled?: boolean } | undefined> {
+  const token = await requireAdminToken();
+
+  try {
+    const { cancelled } = await apiCancelCrawl(token, crawlRunId);
+    revalidatePath('/admin/sources');
+    return { cancelled };
+  } catch (err) {
+    return { error: err instanceof ApiError ? err.message : 'Failed to cancel crawl.' };
+  }
 }
 
 export async function retryJobAction(

@@ -3,7 +3,12 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Redis } from 'ioredis';
 import { z } from 'zod';
 import { prisma } from '@scraper/db';
-import { reserveUrlForRun, scrapeJobId, startCrawlRun } from '@scraper/scraper/crawl-run';
+import {
+  cancelCrawlRun,
+  reserveUrlForRun,
+  scrapeJobId,
+  startCrawlRun,
+} from '@scraper/scraper/crawl-run';
 import { sourceSchema } from '@scraper/shared';
 import { requireAdmin } from '../auth.js';
 import type { Queues } from '../queues.js';
@@ -65,6 +70,35 @@ export function sourcesRoutes(queues: Queues, redis?: Redis): FastifyPluginAsync
           orderBy: { startedAt: 'desc' },
           take: request.query.limit,
         });
+      },
+    );
+
+    app.post(
+      '/crawls/:id/cancel',
+      {
+        preHandler: requireAdmin,
+        schema: {
+          params: z.object({ id: z.string() }),
+          response: {
+            200: z.object({ cancelled: z.boolean() }),
+            404: z.object({ error: z.string() }),
+            503: z.object({ error: z.string() }),
+          },
+        },
+      },
+      async (request, reply) => {
+        if (!redis) {
+          return reply.code(503).send({ error: 'cancellation unavailable (no redis connection)' });
+        }
+
+        const run = await prisma.crawlRun.findUnique({ where: { id: request.params.id } });
+        if (!run) {
+          return reply.code(404).send({ error: 'crawl run not found' });
+        }
+
+        // cancelled=false means the run had already finished (nothing to cancel).
+        const cancelled = await cancelCrawlRun(redis, run.id);
+        return reply.code(200).send({ cancelled });
       },
     );
 

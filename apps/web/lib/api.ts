@@ -206,8 +206,15 @@ export function createSource(
   return apiFetch('/sources', { method: 'POST', body: JSON.stringify(data), adminToken });
 }
 
-export function startCrawl(adminToken: string, sourceId: string): Promise<{ enqueued: true }> {
+export function startCrawl(
+  adminToken: string,
+  sourceId: string,
+): Promise<{ enqueued: true; crawlRunId?: string }> {
   return apiFetch(`/sources/${sourceId}/crawl`, { method: 'POST', adminToken });
+}
+
+export function cancelCrawl(adminToken: string, crawlRunId: string): Promise<{ cancelled: boolean }> {
+  return apiFetch(`/crawls/${crawlRunId}/cancel`, { method: 'POST', adminToken });
 }
 
 export function getQueueCounts(adminToken: string): Promise<QueueCount[]> {

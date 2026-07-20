@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ErrorState, Empty } from '@/components/ui/state';
 import { SourceCreateForm } from '@/components/admin/source-create-form';
 import { StartCrawlButton } from '@/components/admin/start-crawl-button';
+import { CancelCrawlButton } from '@/components/admin/cancel-crawl-button';
 import { CrawlStatusCell } from '@/components/admin/crawl-status';
 
 export default async function AdminSourcesPage() {
@@ -72,7 +73,14 @@ export default async function AdminSourcesPage() {
                   <CrawlStatusCell run={latestRunBySource.get(source.id) ?? null} />
                 </TableCell>
                 <TableCell>
-                  <StartCrawlButton sourceId={source.id} />
+                  {(() => {
+                    const latest = latestRunBySource.get(source.id);
+                    return latest?.status === 'RUNNING' ? (
+                      <CancelCrawlButton crawlRunId={latest.id} />
+                    ) : (
+                      <StartCrawlButton sourceId={source.id} />
+                    );
+                  })()}
                 </TableCell>
               </TableRow>
             ))}

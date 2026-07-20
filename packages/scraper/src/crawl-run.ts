@@ -18,6 +18,10 @@ function settledKey(crawlRunId: string): string {
   return `crawl:${crawlRunId}:settled`;
 }
 
+function cancelledKey(crawlRunId: string): string {
+  return `crawl:${crawlRunId}:cancelled`;
+}
+
 export type ScrapeOutcome = 'done' | 'failed';
 
 // Per-run scrape jobId: namespaced by run so concurrent crawls of the same
@@ -33,21 +37,15 @@ export async function startCrawlRun(sourceId: string): Promise<string> {
   return run.id;
 }
 
-/**
- * Reserves a URL for a crawl run: returns true only the first time this URL is
- * seen in the run, and in that case bumps the run's queued count and the
- * outstanding-jobs counter. This is the single source of truth for "how many
- * scrape jobs belong to this run" — the atomic SADD makes it race-safe across
- * workers and independent of BullMQ's job-dedup / GC timing.
- *
- * Callers must only enqueue a scrape job when this returns true, so that every
- * reserved URL is matched by exactly one settleScrapeForRun call.
- */
 export async function reserveUrlForRun(
   redis: Redis,
   crawlRunId: string,
   url: string,
 ): Promise<boolean> {
+  // Cancelled runs stop expanding immediately: no new URLs are reserved, so
+  // discovery fan-out halts even though already-queued jobs still drain.
+  if (await redis.exists(cancelledKey(crawlRunId))) return false;
+
   const added = await redis.sadd(seenKey(crawlRunId), sha256(url));
   if (added === 0) return false;
 
@@ -66,15 +64,6 @@ export async function reserveUrlForRun(
   return true;
 }
 
-/**
- * Records a scrape job reaching a terminal state (success/skip = 'done', or a
- * final failure after all retries = 'failed'). Decrements the outstanding
- * counter; when it hits zero the run is finalized. Exactly one call per
- * reserved URL keeps the counter honest, so zero reliably means "crawl done".
- *
- * Idempotent per URL via a `settled` set — a job that retries for an unrelated
- * reason (or a settle that partially failed) won't double-count.
- */
 export async function settleScrapeForRun(
   redis: Redis,
   crawlRunId: string,
@@ -108,5 +97,19 @@ export async function settleScrapeForRun(
     data: { status: finalStatus, finishedAt: new Date() },
   });
 
-  await redis.del(outstandingKey(crawlRunId), seenKey(crawlRunId), settledKey(crawlRunId));
+  
+  await redis.del(outstandingKey(crawlRunId));
+}
+
+export async function cancelCrawlRun(redis: Redis, crawlRunId: string): Promise<boolean> {
+  const { count } = await prisma.crawlRun.updateMany({
+    where: { id: crawlRunId, status: CrawlStatus.RUNNING },
+    data: { status: CrawlStatus.CANCELLED, finishedAt: new Date() },
+  });
+
+  if (count === 0) return false;
+
+  await redis.set(cancelledKey(crawlRunId), '1', 'EX', KEY_TTL_SECONDS);
+  await redis.del(outstandingKey(crawlRunId));
+  return true;
 }

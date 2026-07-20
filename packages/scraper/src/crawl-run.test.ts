@@ -22,13 +22,15 @@ vi.mock('@scraper/db', () => ({
   CrawlStatus: { RUNNING: 'RUNNING', SUCCEEDED: 'SUCCEEDED', FAILED: 'FAILED', CANCELLED: 'CANCELLED' },
 }));
 
-const { reserveUrlForRun, settleScrapeForRun } = await import('./crawl-run.js');
+const { reserveUrlForRun, settleScrapeForRun, cancelCrawlRun } = await import('./crawl-run.js');
 
-// Minimal in-memory Redis fake: SADD (set semantics), INCR/DECR counters, and
-// no-op EXPIRE/DEL — enough to exercise the reserve/settle bookkeeping.
+// Minimal in-memory Redis fake: SADD (set semantics), INCR/DECR counters,
+// string keys (set/exists/del), and no-op EXPIRE — enough to exercise the
+// reserve/settle/cancel bookkeeping.
 function fakeRedis() {
   const sets = new Map<string, Set<string>>();
   const counters = new Map<string, number>();
+  const strings = new Map<string, string>();
 
   const redis = {
     sadd: vi.fn(async (key: string, member: string) => {
@@ -48,8 +50,20 @@ function fakeRedis() {
       counters.set(key, next);
       return next;
     }),
+    set: vi.fn(async (key: string, value: string) => {
+      strings.set(key, value);
+      return 'OK';
+    }),
+    exists: vi.fn(async (key: string) => (strings.has(key) ? 1 : 0)),
     expire: vi.fn(async () => 1),
-    del: vi.fn(async () => 1),
+    del: vi.fn(async (...keys: string[]) => {
+      for (const key of keys) {
+        counters.delete(key);
+        strings.delete(key);
+        sets.delete(key);
+      }
+      return keys.length;
+    }),
     multi: vi.fn(() => {
       const chain = {
         incr: (key: string) => {
@@ -62,7 +76,7 @@ function fakeRedis() {
       return chain;
     }),
   };
-  return redis as unknown as Redis & { _counters: Map<string, number> };
+  return redis as unknown as Redis;
 }
 
 describe('crawl-run bookkeeping', () => {
@@ -131,5 +145,29 @@ describe('crawl-run bookkeeping', () => {
       where: { id: 'run-1', status: 'RUNNING' },
       data: { status: 'FAILED', finishedAt: expect.any(Date) },
     });
+  });
+
+  it('cancels a running run and stops further fan-out', async () => {
+    const redis = fakeRedis();
+    crawlRunUpdateMany.mockResolvedValue({ count: 1 });
+
+    const cancelled = await cancelCrawlRun(redis, 'run-1');
+    expect(cancelled).toBe(true);
+    expect(crawlRunUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'run-1', status: 'RUNNING' },
+      data: { status: 'CANCELLED', finishedAt: expect.any(Date) },
+    });
+
+    // After cancellation, reserving a new URL is a no-op (no scrape job fans out).
+    const reserved = await reserveUrlForRun(redis, 'run-1', 'https://x.com/new');
+    expect(reserved).toBe(false);
+  });
+
+  it('reports cancelled=false when the run already finished', async () => {
+    const redis = fakeRedis();
+    crawlRunUpdateMany.mockResolvedValue({ count: 0 });
+
+    const cancelled = await cancelCrawlRun(redis, 'run-1');
+    expect(cancelled).toBe(false);
   });
 });
