@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Redis } from 'ioredis';
 
-const { crawlRunUpdate, crawlRunUpdateMany, crawlRunFindUnique, crawlRunCreate } = vi.hoisted(
-  () => ({
+const { crawlRunUpdate, crawlRunUpdateMany, crawlRunFindUnique, crawlRunCreate, queryRaw } =
+  vi.hoisted(() => ({
     crawlRunUpdate: vi.fn(),
     crawlRunUpdateMany: vi.fn(),
     crawlRunFindUnique: vi.fn(),
     crawlRunCreate: vi.fn(),
-  }),
-);
+    queryRaw: vi.fn(),
+  }));
 
 vi.mock('@scraper/db', () => ({
   prisma: {
@@ -18,11 +18,14 @@ vi.mock('@scraper/db', () => ({
       findUnique: crawlRunFindUnique,
       create: crawlRunCreate,
     },
+    $queryRaw: queryRaw,
   },
   CrawlStatus: { RUNNING: 'RUNNING', SUCCEEDED: 'SUCCEEDED', FAILED: 'FAILED', CANCELLED: 'CANCELLED' },
 }));
 
-const { reserveUrlForRun, settleScrapeForRun, cancelCrawlRun } = await import('./crawl-run.js');
+const { reserveUrlForRun, settleScrapeForRun, cancelCrawlRun, reconcileStaleRuns } = await import(
+  './crawl-run.js'
+);
 
 // Minimal in-memory Redis fake: SADD (set semantics), INCR/DECR counters,
 // string keys (set/exists/del), and no-op EXPIRE — enough to exercise the
@@ -169,5 +172,27 @@ describe('crawl-run bookkeeping', () => {
 
     const cancelled = await cancelCrawlRun(redis, 'run-1');
     expect(cancelled).toBe(false);
+  });
+
+  it('reconciles stale runs and cleans up their Redis keys', async () => {
+    const redis = fakeRedis();
+    queryRaw.mockResolvedValue([{ id: 'stuck-1' }, { id: 'stuck-2' }]);
+
+    const count = await reconcileStaleRuns(redis, { staleAfterMs: 60_000 });
+
+    expect(count).toBe(2);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    // Each reconciled run's per-run keys are cleared (4 keys × 2 runs).
+    expect(redis.del).toHaveBeenCalledTimes(2);
+  });
+
+  it('reconciles nothing (and skips Redis work) when no runs are stale', async () => {
+    const redis = fakeRedis();
+    queryRaw.mockResolvedValue([]);
+
+    const count = await reconcileStaleRuns(redis, { staleAfterMs: 60_000 });
+
+    expect(count).toBe(0);
+    expect(redis.del).not.toHaveBeenCalled();
   });
 });

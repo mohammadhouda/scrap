@@ -29,12 +29,14 @@ model CrawlRun {
   source      Source      @relation(fields: [sourceId], references: [id])
   startedAt   DateTime    @default(now())
   finishedAt  DateTime?
+  updatedAt   DateTime    @default(now())
   status      CrawlStatus @default(RUNNING)
   pagesQueued Int         @default(0)
   pagesDone   Int         @default(0)
   pagesFailed Int         @default(0)
 
   @@index([sourceId])
+  @@index([status, updatedAt])
 }
 
 enum CrawlStatus {

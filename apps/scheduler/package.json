@@ -13,7 +13,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@scraper/shared": "workspace:*"
+    "@scraper/scraper": "workspace:*",
+    "@scraper/shared": "workspace:*",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

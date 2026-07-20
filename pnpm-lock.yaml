@@ -96,9 +96,15 @@ importers:
 
   apps/scheduler:
     dependencies:
+      '@scraper/scraper':
+        specifier: workspace:*
+        version: link:../../packages/scraper
       '@scraper/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.11.1
     devDependencies:
       '@types/node':
         specifier: ^22.9.0

@@ -113,3 +113,38 @@ export async function cancelCrawlRun(redis: Redis, crawlRunId: string): Promise<
   await redis.del(outstandingKey(crawlRunId));
   return true;
 }
+
+const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
+
+export interface ReconcileOptions {
+  staleAfterMs?: number;
+  now?: Date;
+}
+
+export async function reconcileStaleRuns(
+  redis?: Redis,
+  options: ReconcileOptions = {},
+): Promise<number> {
+  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+  const cutoff = new Date((options.now ?? new Date()).getTime() - staleAfterMs);
+
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    UPDATE "CrawlRun"
+    SET status = CASE
+          WHEN "pagesDone" > 0 AND "pagesDone" + "pagesFailed" >= "pagesQueued"
+            THEN 'SUCCEEDED'::"CrawlStatus"
+          ELSE 'FAILED'::"CrawlStatus"
+        END,
+        "finishedAt" = now()
+    WHERE status = 'RUNNING' AND "updatedAt" < ${cutoff}
+    RETURNING id
+  `;
+
+  if (redis && rows.length > 0) {
+    for (const { id } of rows) {
+      await redis.del(outstandingKey(id), seenKey(id), settledKey(id), cancelledKey(id));
+    }
+  }
+
+  return rows.length;
+}
