@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { Redis } from 'ioredis';
 
 const prisma = new PrismaClient();
 
@@ -40,6 +41,12 @@ async function main() {
   await prisma.crawlRun.deleteMany();
   await prisma.page.deleteMany();
   await prisma.source.deleteMany();
+
+  const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { lazyConnect: true });
+  await redis.connect();
+  await redis.flushdb();
+  await redis.quit();
+  console.log('flushed Redis queue state');
 
   for (const source of sources) {
     await prisma.source.create({ data: source });
