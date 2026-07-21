@@ -34,12 +34,15 @@ const sources = [
 ];
 
 async function main() {
+  console.log('clearing existing data...');
+  await prisma.chunk.deleteMany();
+  await prisma.pageVersion.deleteMany();
+  await prisma.crawlRun.deleteMany();
+  await prisma.page.deleteMany();
+  await prisma.source.deleteMany();
+
   for (const source of sources) {
-    await prisma.source.upsert({
-      where: { name: source.name },
-      create: source,
-      update: source,
-    });
+    await prisma.source.create({ data: source });
   }
   console.log(`seeded ${sources.length} sources`);
 }
