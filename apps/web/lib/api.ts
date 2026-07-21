@@ -121,9 +121,12 @@ export async function apiFetch<T>(
   const base = resolveBaseUrl();
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(rest.headers as Record<string, string> | undefined),
   };
+  // If the request has a body, set the Content-Type to application/json. If an admin token is provided, set the Authorization header.
+  if (rest.body != null) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (adminToken) {
     headers.Authorization = `Bearer ${adminToken}`;
   }

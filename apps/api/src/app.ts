@@ -32,6 +32,24 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
+  // The default JSON parser in Fastify rejects empty bodies, but we want to allow
+  // them for endpoints that don't require a body (e.g. GET /health).
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_req, body, done) => {
+      if (body === '') {
+        done(null, undefined);
+        return;
+      }
+      try {
+        done(null, JSON.parse(body as string));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   // Restrict CORS to an explicit allowlist in production (CORS_ORIGIN, comma-
   // separated). With none set, fall back to reflecting the request origin so
   // local dev keeps working — but a deployed instance should always pin this.

@@ -171,6 +171,21 @@ describe('POST /sources/:id/crawl', () => {
       depth: 0,
     });
   });
+
+  it('accepts an empty body sent with an application/json content-type', async () => {
+    // Reproduces the browser fetch(): Content-Type: application/json with no
+    // body. Without the lenient parser this 400s (FST_ERR_CTP_EMPTY_JSON_BODY).
+    sourceFindUnique.mockResolvedValue(testSource);
+    const { app } = await buildTestApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/sources/source-1/crawl',
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' },
+    });
+
+    expect(response.statusCode).toBe(202);
+  });
 });
 
 describe('GET /pages', () => {

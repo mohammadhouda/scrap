@@ -40,4 +40,25 @@ describe('filterLinks', () => {
     });
     expect(result).toEqual(['https://example.com/anything']);
   });
+
+  it('strips the #fragment so anchored links dedupe to the base page', () => {
+    const result = filterLinks(
+      [
+        'https://example.com/docs/intro#message',
+        'https://example.com/docs/intro#examples',
+        'https://example.com/docs/intro',
+      ],
+      rules,
+    );
+    // All three collapse to a single canonical page.
+    expect(result).toEqual(['https://example.com/docs/intro']);
+  });
+
+  it('deduplicates repeated links within a batch', () => {
+    const result = filterLinks(
+      ['https://example.com/docs/a', 'https://example.com/docs/a'],
+      rules,
+    );
+    expect(result).toEqual(['https://example.com/docs/a']);
+  });
 });

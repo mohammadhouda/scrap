@@ -9,18 +9,28 @@ export function filterLinks(links: string[], rules: LinkFilterRules): string[] {
   const allow = rules.allowPatterns.map((pattern) => new RegExp(pattern));
   const deny = rules.denyPatterns.map((pattern) => new RegExp(pattern));
 
-  return links.filter((link) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const link of links) {
     let url: URL;
     try {
       url = new URL(link);
     } catch {
-      return false;
+      continue;
     }
 
-    if (url.origin !== seedOrigin) return false;
-    if (deny.some((pattern) => pattern.test(url.toString()))) return false;
-    if (allow.length > 0 && !allow.some((pattern) => pattern.test(url.toString()))) return false;
+    url.hash = '';
+    const normalized = url.toString();
 
-    return true;
-  });
+    if (url.origin !== seedOrigin) continue;
+    if (deny.some((pattern) => pattern.test(normalized))) continue;
+    if (allow.length > 0 && !allow.some((pattern) => pattern.test(normalized))) continue;
+    if (seen.has(normalized)) continue;
+
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
 }

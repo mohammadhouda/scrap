@@ -24,10 +24,9 @@ function cancelledKey(crawlRunId: string): string {
 
 export type ScrapeOutcome = 'done' | 'failed';
 
-// Per-run scrape jobId: namespaced by run so concurrent crawls of the same
-// source stay independent (intra-run dedup is handled by reserveUrlForRun).
+
 export function scrapeJobId(crawlRunId: string, url: string): string {
-  return `${crawlRunId}:${sha256(url)}`;
+  return `${crawlRunId}-${sha256(url)}`;
 }
 
 export async function startCrawlRun(sourceId: string): Promise<string> {

@@ -77,7 +77,7 @@ describe('processDiscoverJob', () => {
     expect(queues.scrape.add).toHaveBeenCalledWith(
       'scrape',
       { sourceId: 'source-1', url: 'https://example.com/a', depth: 1, crawlRunId: 'run-1' },
-      expect.objectContaining({ jobId: expect.stringMatching(/^run-1:/) }),
+      expect.objectContaining({ jobId: expect.stringMatching(/^run-1-/) }),
     );
   });
 });

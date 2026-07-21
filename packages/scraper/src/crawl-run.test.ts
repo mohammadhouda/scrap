@@ -23,9 +23,8 @@ vi.mock('@scraper/db', () => ({
   CrawlStatus: { RUNNING: 'RUNNING', SUCCEEDED: 'SUCCEEDED', FAILED: 'FAILED', CANCELLED: 'CANCELLED' },
 }));
 
-const { reserveUrlForRun, settleScrapeForRun, cancelCrawlRun, reconcileStaleRuns } = await import(
-  './crawl-run.js'
-);
+const { reserveUrlForRun, settleScrapeForRun, cancelCrawlRun, reconcileStaleRuns, scrapeJobId } =
+  await import('./crawl-run.js');
 
 // Minimal in-memory Redis fake: SADD (set semantics), INCR/DECR counters,
 // string keys (set/exists/del), and no-op EXPIRE — enough to exercise the
@@ -84,6 +83,12 @@ function fakeRedis() {
 
 describe('crawl-run bookkeeping', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('produces a jobId with no ":" (BullMQ forbids it in custom ids)', () => {
+    const id = scrapeJobId('run-1', 'https://x.com/a');
+    expect(id).not.toContain(':');
+    expect(id.startsWith('run-1-')).toBe(true);
+  });
 
   it('reserves a URL once per run and only counts the first sighting', async () => {
     const redis = fakeRedis();
