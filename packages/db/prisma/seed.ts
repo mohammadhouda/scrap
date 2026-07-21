@@ -28,7 +28,7 @@ const sources = [
     allowPatterns: ['^https://developer\\.mozilla\\.org/en-US/docs/Web/JavaScript'],
     denyPatterns: [] as string[],
     renderJs: false,
-    maxDepth: 15,
+    maxDepth: 2,
     ratePerSecond: 1,
   },
 ];
