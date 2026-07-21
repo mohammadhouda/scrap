@@ -100,6 +100,13 @@ export async function settleScrapeForRun(
   await redis.del(outstandingKey(crawlRunId));
 }
 
+// Cheap check (one Redis EXISTS) a scrape worker runs before doing any real
+// work, so jobs already queued when a run is cancelled drain near-instantly
+// instead of fetching + embedding pages nobody wants anymore.
+export async function isCrawlCancelled(redis: Redis, crawlRunId: string): Promise<boolean> {
+  return (await redis.exists(cancelledKey(crawlRunId))) === 1;
+}
+
 export async function cancelCrawlRun(redis: Redis, crawlRunId: string): Promise<boolean> {
   const { count } = await prisma.crawlRun.updateMany({
     where: { id: crawlRunId, status: CrawlStatus.RUNNING },

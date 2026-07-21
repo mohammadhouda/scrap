@@ -159,6 +159,10 @@ export function getCrawls(sourceId: string, limit = 10): Promise<CrawlRun[]> {
   return apiFetch(`/sources/${sourceId}/crawls?limit=${limit}`);
 }
 
+export function getLatestCrawls(): Promise<CrawlRun[]> {
+  return apiFetch('/crawls/latest');
+}
+
 export interface PagedResult<T> {
   items: T[];
   total: number;

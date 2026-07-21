@@ -37,6 +37,8 @@ const crawlRunResponseSchema = z.object({
   pagesFailed: z.number(),
 });
 
+type CrawlRunRow = z.infer<typeof crawlRunResponseSchema>;
+
 export function sourcesRoutes(queues: Queues, redis?: Redis): FastifyPluginAsync {
   return async (rawApp) => {
     const app = rawApp.withTypeProvider<ZodTypeProvider>();
@@ -45,6 +47,21 @@ export function sourcesRoutes(queues: Queues, redis?: Redis): FastifyPluginAsync
       '/sources',
       { schema: { response: { 200: z.array(sourceResponseSchema) } } },
       async () => prisma.source.findMany({ orderBy: { createdAt: 'desc' } }),
+    );
+
+    // Latest crawl run per source, in one query — backs the admin table's live
+    // polling so it doesn't need an N+1 request per source.
+    app.get(
+      '/crawls/latest',
+      { schema: { response: { 200: z.array(crawlRunResponseSchema) } } },
+      async () =>
+        prisma.$queryRaw<CrawlRunRow[]>`
+          SELECT DISTINCT ON ("sourceId")
+            id, "sourceId", status, "startedAt", "finishedAt",
+            "pagesQueued", "pagesDone", "pagesFailed"
+          FROM "CrawlRun"
+          ORDER BY "sourceId", "startedAt" DESC
+        `,
     );
 
     app.get(

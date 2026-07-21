@@ -8,6 +8,7 @@ import {
   checkRobots,
   cheerioFetch,
   filterLinks,
+  isCrawlCancelled,
   persistVersion,
   playwrightFetch,
   settleScrapeForRun,
@@ -23,7 +24,7 @@ export interface ScrapeJobData {
 }
 
 export type ScrapeJobResult =
-  | { skipped: 'robots' }
+  | { skipped: 'robots' | 'cancelled' }
   | { defer: number }
   | { unchanged: true }
   | { versioned: number };
@@ -34,6 +35,14 @@ export async function processScrapeJob(
   data: ScrapeJobData,
 ): Promise<ScrapeJobResult> {
   const { url, sourceId, depth, crawlRunId } = data;
+
+  // Bail before any DB/fetch/embed work if the run was cancelled. Jobs already
+  // in the queue at cancel time drain here near-instantly instead of doing
+  // (and paying for) work whose results nobody wants.
+  if (crawlRunId && (await isCrawlCancelled(connection, crawlRunId))) {
+    return { skipped: 'cancelled' };
+  }
+
   const source = await prisma.source.findUniqueOrThrow({ where: { id: sourceId } });
 
   const robotsCheck = await checkRobots(connection, url);
@@ -105,8 +114,11 @@ export function buildScrapeWorker(connection: Redis, queues: Queues): Worker<Scr
 
       // Terminal success (versioned / unchanged / robots-skip) — settle the
       // crawl-run counter. Terminal *failures* are settled in index.ts's
-      // 'failed' handler once retries are exhausted.
-      if (job.data.crawlRunId) {
+      // 'failed' handler once retries are exhausted. A cancelled-skip is NOT
+      // settled: the run is already finalized, and counting it would keep
+      // pagesDone climbing after the user cancelled.
+      const cancelledSkip = 'skipped' in result && result.skipped === 'cancelled';
+      if (job.data.crawlRunId && !cancelledSkip) {
         await settleScrapeForRun(connection, job.data.crawlRunId, job.data.url, 'done');
       }
 

@@ -15,15 +15,15 @@ vi.mock('@scraper/db', () => ({
   prisma: { source: { findUniqueOrThrow } },
 }));
 
-const { checkRobots, checkRateLimit, cheerioFetch, playwrightFetch, persistVersion } = vi.hoisted(
-  () => ({
+const { checkRobots, checkRateLimit, cheerioFetch, playwrightFetch, persistVersion, isCrawlCancelled } =
+  vi.hoisted(() => ({
     checkRobots: vi.fn(),
     checkRateLimit: vi.fn(),
     cheerioFetch: vi.fn(),
     playwrightFetch: vi.fn(),
     persistVersion: vi.fn(),
-  }),
-);
+    isCrawlCancelled: vi.fn(),
+  }));
 
 vi.mock('@scraper/scraper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@scraper/scraper')>();
@@ -34,6 +34,7 @@ vi.mock('@scraper/scraper', async (importOriginal) => {
     cheerioFetch,
     playwrightFetch,
     persistVersion,
+    isCrawlCancelled,
   };
 });
 
@@ -72,6 +73,25 @@ describe('processScrapeJob', () => {
     extractTables.mockReturnValue([]);
     detectLanguage.mockReturnValue('eng');
     persistVersion.mockResolvedValue({ status: 'created', version: 1, pageVersionId: 'pv-1' });
+    isCrawlCancelled.mockResolvedValue(false);
+  });
+
+  it('skips immediately (no robots/fetch) when the crawl run was cancelled', async () => {
+    isCrawlCancelled.mockResolvedValue(true);
+    const queues = fakeQueues();
+
+    const result = await processScrapeJob(connection, queues, {
+      sourceId: source.id,
+      url: 'https://example.com/page',
+      depth: 0,
+      crawlRunId: 'run-1',
+    });
+
+    expect(result).toEqual({ skipped: 'cancelled' });
+    expect(findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(checkRobots).not.toHaveBeenCalled();
+    expect(cheerioFetch).not.toHaveBeenCalled();
+    expect(persistVersion).not.toHaveBeenCalled();
   });
 
   it('skips fetching when robots.txt disallows the URL', async () => {
