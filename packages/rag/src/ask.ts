@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import type { Fetch } from 'openai/core';
 import type { Embedder } from './embed.js';
+import { createOpenAIFetch } from './openai-fetch.js';
 import { hybridSearch } from './hybrid.js';
 import { keywordSearch, semanticSearch, type RetrievedChunk, type SearchOptions } from './retrieve.js';
 import { buildPrompt, type PromptSource } from './prompt.js';
@@ -66,10 +66,11 @@ export function createAsker(options: AskerOptions): Asker {
   // because ANTHROPIC_API_KEY-style config isn't set yet.
   let client: OpenAI | undefined;
   function getClient(): OpenAI {
-    // Force Node's native (undici) fetch instead of the SDK's default
+    // Native fetch + content-length stripping; see openai-fetch.ts for why the
+    // wrapper is required in any process that loads @scraper/processor (jsdom).
     client ??= new OpenAI({
       apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
-      fetch: globalThis.fetch as unknown as Fetch,
+      fetch: createOpenAIFetch(),
     });
     return client;
   }

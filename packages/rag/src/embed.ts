@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { Fetch } from 'openai/core';
+import { createOpenAIFetch } from './openai-fetch.js';
 
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 5;
@@ -46,13 +46,13 @@ export function createEmbedder(options: EmbedderOptions = {}): Embedder {
   // scrape/discover jobs even before embeddings are configured.
   let client: OpenAI | undefined;
   function getClient(): OpenAI {
-    // Force Node's native (undici) fetch instead of the SDK's default
-    // node-fetch@2, which has a long-standing bug where a proxy/VPN/AV TLS
-    // inspection layer truncating the gzip response body surfaces as an
-    // unrecoverable `ERR_STREAM_PREMATURE_CLOSE` on every attempt.
+    // createOpenAIFetch: uses Node's native fetch (avoids the SDK default
+    // node-fetch@2's `ERR_STREAM_PREMATURE_CLOSE` under TLS-inspecting
+    // proxies) *and* strips the content-length header that a jsdom-installed
+    // global undici dispatcher rejects — see openai-fetch.ts.
     client ??= new OpenAI({
       apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
-      fetch: globalThis.fetch as unknown as Fetch,
+      fetch: createOpenAIFetch(),
     });
     return client;
   }
