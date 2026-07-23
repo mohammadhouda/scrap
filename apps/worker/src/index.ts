@@ -1,5 +1,5 @@
 import { QUEUE_NAMES } from '@scraper/shared';
-import { settleScrapeForRun } from '@scraper/scraper';
+import { closePlaywright, settleScrapeForRun } from '@scraper/scraper';
 import { buildDiscoverWorker } from './discover-worker.js';
 import { buildIndexWorker } from './index-worker.js';
 import { createQueues } from './queues.js';
@@ -54,6 +54,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`received ${signal}, draining workers...`);
   try {
     await Promise.all(workers.map((worker) => worker.close()));
+    await closePlaywright();
     await connection.quit();
     console.log('workers drained, exiting');
     process.exit(0);

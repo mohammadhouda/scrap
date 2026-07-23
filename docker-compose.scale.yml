@@ -1,0 +1,18 @@
+# Overlay for the horizontal-scaling demo (Phase 7).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.scale.yml up --build
+#
+# runs 4 worker replicas by default; `--scale worker=N` on the command line
+# overrides the replica count without editing this file. Workers coordinate
+# purely through Redis (BullMQ queues + per-run bookkeeping), so replicas can
+# be added or SIGKILLed at any time — see scripts/kill-worker.sh and
+# docs/benchmarks.md.
+services:
+  worker:
+    deploy:
+      replicas: 4
+    environment:
+      # Keep per-container concurrency modest so the scaling effect is visible
+      # as containers are added, rather than one container saturating the
+      # per-domain rate limit on its own.
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}

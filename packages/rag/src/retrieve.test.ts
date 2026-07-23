@@ -33,6 +33,18 @@ describe('semanticSearch', () => {
     expect(result).toEqual(sampleRows);
   });
 
+  it('applies the similarity floor as a cosine-distance ceiling in the query', async () => {
+    const embedTexts = vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]);
+    queryRaw.mockResolvedValue([]);
+
+    await semanticSearch(embedTexts, 'query', { minSimilarity: 0.4 });
+
+    // Tagged-template call: [strings, ...interpolated values]. The distance
+    // ceiling 1 - minSimilarity must be among the bound values.
+    const values = queryRaw.mock.calls[0]?.slice(1) ?? [];
+    expect(values).toContain(0.6);
+  });
+
   it('returns an empty array without querying if embedding fails to produce a vector', async () => {
     const embedTexts = vi.fn().mockResolvedValue([]);
 

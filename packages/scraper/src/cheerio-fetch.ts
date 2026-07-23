@@ -1,4 +1,6 @@
 import * as cheerio from 'cheerio';
+import { decodeHtml } from './charset.js';
+import { parseRetryAfterMs, RateLimitedError } from './errors.js';
 import type { FetchResult } from './fetch-result.js';
 import { USER_AGENT } from './robots.js';
 
@@ -12,20 +14,21 @@ function isHtml(contentType: string | null): boolean {
 }
 
 // Reads the body but aborts once MAX_BYTES is exceeded, so a hostile/huge
-// response can't be buffered fully into memory before we reject it.
-async function readCapped(response: Response): Promise<string> {
+// response can't be buffered fully into memory before we reject it. Returns
+// raw bytes: the charset isn't reliably known until the whole prefix is
+// available (header, BOM, or <meta>), so decoding happens afterwards.
+async function readCapped(response: Response): Promise<Uint8Array> {
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > MAX_BYTES) {
     throw new Error(`response too large: ${declared} bytes > ${MAX_BYTES}`);
   }
 
   const body = response.body;
-  if (!body) return response.text();
+  if (!body) return new Uint8Array(await response.arrayBuffer());
 
   const reader = body.getReader();
-  const decoder = new TextDecoder();
+  const chunks: Uint8Array[] = [];
   let received = 0;
-  let html = '';
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -35,10 +38,16 @@ async function readCapped(response: Response): Promise<string> {
       await reader.cancel();
       throw new Error(`response exceeded ${MAX_BYTES} bytes`);
     }
-    html += decoder.decode(value, { stream: true });
+    chunks.push(value);
   }
-  html += decoder.decode();
-  return html;
+
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 export async function cheerioFetch(url: string): Promise<FetchResult> {
@@ -46,6 +55,12 @@ export async function cheerioFetch(url: string): Promise<FetchResult> {
     headers: { 'user-agent': USER_AGENT },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
+  // 429 (and 503, which overloaded origins use the same way) is an explicit
+  // "back off" — surface it as a typed error so the worker can open a shared
+  // per-domain cooldown honoring Retry-After, instead of retrying blind.
+  if (response.status === 429 || response.status === 503) {
+    throw new RateLimitedError(url, response.status, parseRetryAfterMs(response.headers.get('retry-after')));
+  }
   if (!response.ok) {
     throw new Error(`fetch failed: ${response.status} ${url}`);
   }
@@ -55,7 +70,7 @@ export async function cheerioFetch(url: string): Promise<FetchResult> {
     throw new Error(`unsupported content-type "${contentType}" for ${url}`);
   }
 
-  const html = await readCapped(response);
+  const html = decodeHtml(await readCapped(response), contentType);
   const $ = cheerio.load(html);
 
   const discoveredLinks = new Set<string>();

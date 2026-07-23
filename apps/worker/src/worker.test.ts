@@ -15,15 +15,23 @@ vi.mock('@scraper/db', () => ({
   prisma: { source: { findUniqueOrThrow } },
 }));
 
-const { checkRobots, checkRateLimit, cheerioFetch, playwrightFetch, persistVersion, isCrawlCancelled } =
-  vi.hoisted(() => ({
-    checkRobots: vi.fn(),
-    checkRateLimit: vi.fn(),
-    cheerioFetch: vi.fn(),
-    playwrightFetch: vi.fn(),
-    persistVersion: vi.fn(),
-    isCrawlCancelled: vi.fn(),
-  }));
+const {
+  checkRobots,
+  checkRateLimit,
+  applyDomainCooldown,
+  cheerioFetch,
+  playwrightFetch,
+  persistVersion,
+  isCrawlCancelled,
+} = vi.hoisted(() => ({
+  checkRobots: vi.fn(),
+  checkRateLimit: vi.fn(),
+  applyDomainCooldown: vi.fn(),
+  cheerioFetch: vi.fn(),
+  playwrightFetch: vi.fn(),
+  persistVersion: vi.fn(),
+  isCrawlCancelled: vi.fn(),
+}));
 
 vi.mock('@scraper/scraper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@scraper/scraper')>();
@@ -31,6 +39,7 @@ vi.mock('@scraper/scraper', async (importOriginal) => {
     ...actual,
     checkRobots,
     checkRateLimit,
+    applyDomainCooldown,
     cheerioFetch,
     playwrightFetch,
     persistVersion,
@@ -121,6 +130,40 @@ describe('processScrapeJob', () => {
     expect(result).toEqual({ defer: 1500 });
     expect(cheerioFetch).not.toHaveBeenCalled();
     expect(persistVersion).not.toHaveBeenCalled();
+  });
+
+  it('opens a shared domain cooldown and rethrows when the origin answers 429', async () => {
+    const { RateLimitedError } = await import('@scraper/scraper');
+    const err = new RateLimitedError('https://example.com/page', 429, 90_000);
+    cheerioFetch.mockRejectedValue(err);
+    applyDomainCooldown.mockResolvedValue(90_000);
+    const queues = fakeQueues();
+
+    await expect(
+      processScrapeJob(connection, queues, {
+        sourceId: source.id,
+        url: 'https://example.com/page',
+        depth: 0,
+      }),
+    ).rejects.toBe(err);
+
+    expect(applyDomainCooldown).toHaveBeenCalledWith(connection, 'example.com', 90_000);
+    expect(persistVersion).not.toHaveBeenCalled();
+  });
+
+  it('does not open a cooldown for a plain fetch failure', async () => {
+    cheerioFetch.mockRejectedValue(new Error('fetch failed: 500'));
+    const queues = fakeQueues();
+
+    await expect(
+      processScrapeJob(connection, queues, {
+        sourceId: source.id,
+        url: 'https://example.com/page',
+        depth: 0,
+      }),
+    ).rejects.toThrow('fetch failed: 500');
+
+    expect(applyDomainCooldown).not.toHaveBeenCalled();
   });
 
   it('skips discovery and indexing when persistVersion reports the content is unchanged', async () => {

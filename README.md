@@ -13,7 +13,10 @@ API reference) and [`plan.md`](plan.md) for the original build plan.
 
 1. Crawls multiple sites — static, JS-rendered, and a 500+ page catalog —
    using any number of independent worker containers coordinated through
-   shared BullMQ queues, not Crawlee's own (in-process, unscalable) queue.
+   shared BullMQ queues (never an in-process, unscalable crawl-framework
+   queue). Politeness is enforced twice: proactively (per-domain token
+   bucket + robots.txt `Crawl-delay`) and reactively (a 429/503 with
+   `Retry-After` opens a shared cooldown the whole fleet honors).
 2. Cleans HTML to Markdown, versions every change (nothing is ever
    overwritten), and extracts tables separately.
 3. Chunks, embeds (OpenAI `text-embedding-3-small`), and indexes content
@@ -36,7 +39,7 @@ apps/
 packages/
   db/          Prisma schema, client, migrations (Postgres + pgvector)
   shared/      Zod schemas, types, constants shared across apps
-  scraper/     Crawlee integration, robots.txt, rate limiting, dedup, versioning
+  scraper/     Fetchers (cheerio + shared-Chromium), robots.txt, rate limiting, dedup, versioning
   processor/   Readability + Turndown cleaning pipeline, table extraction
   rag/         Chunking, embeddings, retrieval (keyword/semantic/hybrid), RAG prompt + ask
 docker/        Per-app Dockerfiles (multi-stage, via `turbo prune`)
@@ -106,6 +109,11 @@ cp .env.example .env         # fill in OPENAI_API_KEY, and change ADMIN_TOKEN
 docker compose up --build
 ```
 
+A one-shot `migrate` service applies the checked-in migrations and seeds the
+demo sources before `api`/`worker` start, so this works from a fresh clone
+with no manual DB step. Seeding only happens on an **empty** database —
+restarting the stack never wipes crawled data.
+
 Same ports as above (`localhost:4000`, `localhost:3000`); Postgres/Redis
 are not exposed to any extra tooling beyond what's in `docker-compose.yml`.
 
@@ -113,10 +121,17 @@ are not exposed to any extra tooling beyond what's in `docker-compose.yml`.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.scale.yml up --scale worker=4
+
+# measure a crawl (pages/sec + lost-job check):
+pnpm --filter @scraper/worker run bench quotes-static
+
+# chaos test: SIGKILL a worker mid-crawl, watch the others absorb its jobs:
+./scripts/kill-worker.sh
 ```
 
-(Phase 7 — see [`docs/benchmarks.md`](docs/benchmarks.md) for measured
-speedup once populated.)
+See [`docs/benchmarks.md`](docs/benchmarks.md) for the methodology (including
+why single-domain throughput is rate-limit-bound by design) and the measured
+results table.
 
 ## Common commands
 

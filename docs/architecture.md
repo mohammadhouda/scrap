@@ -58,20 +58,20 @@ container replicas can consume the same three queues (`scrape`, `discover`,
 
 ---
 
-## Why queue-coordinated, not Crawlee-coordinated
+## Why queue-coordinated, not framework-coordinated
 
-[Crawlee](https://crawlee.dev) is used strictly as a **per-job fetcher**
-inside a single BullMQ job handler — never as its own crawl coordinator.
-Crawlee's built-in `RequestQueue` is in-process and not shared across
-containers, so using it for coordination would make horizontal scaling
-impossible. Instead:
+Crawl frameworks like Crawlee ship their own in-process request queue,
+which is not shared across containers — using it for coordination would
+make horizontal scaling impossible. Here the fetch layer is deliberately
+thin and all coordination lives in Redis:
 
 - BullMQ (`scrape`, `discover`, `index` queues on Redis) owns all
   cross-worker coordination, retries, backoff, and the dead-letter queue.
-- Each `scrape` job fetches exactly one URL (via Crawlee's `CheerioCrawler`
-  for static pages or `PlaywrightCrawler` for JS-rendered ones, picked per
-  `Source.renderJs`), then hands newly discovered links back to BullMQ as a
-  `discover` job — not to Crawlee's own queue.
+- Each `scrape` job fetches exactly one URL — `fetch` + cheerio for static
+  pages, or a **shared headless Chromium** (one browser per worker process,
+  one fresh context per fetch — `packages/scraper/src/playwright-fetch.ts`)
+  for JS-rendered ones, picked per `Source.renderJs` — then hands newly
+  discovered links back to BullMQ as a `discover` job.
 
 ## URL lifecycle (scrape → discover → index)
 
@@ -92,7 +92,7 @@ sequenceDiagram
     ScrapeQ->>ScrapeW: job
     ScrapeW->>ScrapeW: robots.txt check (cached, Redis, 24h TTL)
     ScrapeW->>ScrapeW: per-domain token-bucket rate limit
-    ScrapeW->>ScrapeW: fetch via Crawlee (Cheerio or Playwright)
+    ScrapeW->>ScrapeW: fetch (cheerio, or shared-Chromium for JS pages)
     ScrapeW->>ScrapeW: Readability + Turndown -> cleanedMd
     ScrapeW->>DB: contentHash == latest version's hash?
     alt unchanged

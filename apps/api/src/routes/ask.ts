@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { prisma } from '@scraper/db';
-import type { Asker } from '@scraper/rag';
+import { extractCitedIndices, type Asker } from '@scraper/rag';
 import { MAX_QUERY_LENGTH } from '@scraper/shared';
 
 const askBodySchema = z.object({
@@ -46,12 +46,18 @@ export function askRoutes(ask: Asker): FastifyPluginAsync {
 
       try {
         const result = await ask(question, { mode, sourceId });
+        // The full retrieval set goes out up front so [n] markers can render
+        // as links while tokens stream; once the answer is complete, a second
+        // event narrows it to the sources the model actually cited.
         sseWrite(reply.raw, 'citations', result.citations);
 
+        let fullAnswer = '';
         for await (const token of result.answerStream) {
+          fullAnswer += token;
           sseWrite(reply.raw, 'token', { text: token });
         }
 
+        sseWrite(reply.raw, 'citations-used', { indices: extractCitedIndices(fullAnswer) });
         sseWrite(reply.raw, 'done', {});
       } catch (err) {
         request.log.error(err, 'ask stream failed');

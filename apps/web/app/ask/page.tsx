@@ -17,6 +17,7 @@ export default function AskPage() {
   const [askedQuestion, setAskedQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [citations, setCitations] = useState<Citation[]>([]);
+  const [citedIndices, setCitedIndices] = useState<number[] | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -27,6 +28,7 @@ export default function AskPage() {
     setAskedQuestion(question.trim());
     setAnswer('');
     setCitations([]);
+    setCitedIndices(null);
     setErrorMessage('');
     setStatus('streaming');
 
@@ -45,6 +47,9 @@ export default function AskPage() {
       for await (const event of readSseStream(response)) {
         if (event.event === 'citations') {
           setCitations(JSON.parse(event.data) as Citation[]);
+        } else if (event.event === 'citations-used') {
+          const { indices } = JSON.parse(event.data) as { indices: number[] };
+          setCitedIndices(indices);
         } else if (event.event === 'token') {
           const { text } = JSON.parse(event.data) as { text: string };
           setAnswer((prev) => prev + text);
@@ -141,26 +146,72 @@ export default function AskPage() {
         ) : null}
 
         {citations.length > 0 ? (
-          <div className="flex flex-col gap-2 animate-slide-up">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sources</h2>
-            <ul className="flex flex-col gap-2">
-              {citations.map((c) => (
-                <li key={c.chunkId}>
-                  <Link
-                    href={`/page/${c.pageId}?chunk=${c.chunkId}`}
-                    className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5 text-sm transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
-                  >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-zinc-900">
-                      {c.n}
-                    </span>
-                    <span className="truncate text-zinc-300">{c.title ?? c.url}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <SourceList citations={citations} citedIndices={citedIndices} />
         ) : null}
       </div>
     </div>
+  );
+}
+
+// While streaming (citedIndices === null) every retrieved source is listed.
+// Once the answer is complete, the sources the model actually cited stay at
+// full strength and the rest collapse under a quieter "also retrieved"
+// section — retrieved-but-uncited context is still inspectable, but no longer
+// masquerades as evidence for the answer.
+function SourceList({
+  citations,
+  citedIndices,
+}: {
+  citations: Citation[];
+  citedIndices: number[] | null;
+}) {
+  const cited =
+    citedIndices === null ? citations : citations.filter((c) => citedIndices.includes(c.n));
+  const uncited =
+    citedIndices === null ? [] : citations.filter((c) => !citedIndices.includes(c.n));
+
+  return (
+    <div className="flex flex-col gap-2 animate-slide-up">
+      {cited.length > 0 ? (
+        <>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            {citedIndices === null ? 'Sources' : 'Cited sources'}
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {cited.map((c) => (
+              <SourceItem key={c.chunkId} citation={c} />
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {uncited.length > 0 ? (
+        <>
+          <h2 className="mt-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+            Retrieved but not cited
+          </h2>
+          <ul className="flex flex-col gap-2 opacity-60">
+            {uncited.map((c) => (
+              <SourceItem key={c.chunkId} citation={c} />
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function SourceItem({ citation: c }: { citation: Citation }) {
+  return (
+    <li>
+      <Link
+        href={`/page/${c.pageId}?chunk=${c.chunkId}`}
+        className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5 text-sm transition-colors hover:border-zinc-700 hover:bg-zinc-800/60"
+      >
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-zinc-900">
+          {c.n}
+        </span>
+        <span className="truncate text-zinc-300">{c.title ?? c.url}</span>
+      </Link>
+    </li>
   );
 }

@@ -302,6 +302,10 @@ describe('POST /ask', () => {
     expect(response.payload).toContain('"url":"https://x.com"');
     expect(response.payload).toContain('event: token');
     expect(response.payload).toContain('The answer');
+    // After streaming, the route narrows the retrieval set to the [n] markers
+    // the model actually used ("... is 42 [1]." -> [1]).
+    expect(response.payload).toContain('event: citations-used');
+    expect(response.payload).toContain('"indices":[1]');
     expect(response.payload).toContain('event: done');
   });
 

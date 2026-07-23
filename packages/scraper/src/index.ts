@@ -1,3 +1,5 @@
+export * from './charset.js';
+export * from './errors.js';
 export * from './fetch-result.js';
 export * from './dedup.js';
 export * from './robots.js';

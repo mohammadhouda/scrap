@@ -9,6 +9,7 @@
     "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "start": "node dist/index.js",
     "crawl": "dotenv -e ../../.env -- tsx src/scripts/enqueue-crawl.ts",
+    "bench": "dotenv -e ../../.env -- tsx src/scripts/bench.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

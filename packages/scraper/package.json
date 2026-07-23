@@ -23,7 +23,6 @@
     "@scraper/db": "workspace:*",
     "@scraper/shared": "workspace:*",
     "cheerio": "^1.0.0",
-    "crawlee": "^3.13.0",
     "ioredis": "^5.4.1",
     "playwright": "^1.48.2",
     "robots-parser": "^3.0.1"

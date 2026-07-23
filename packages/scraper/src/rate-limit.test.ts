@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Redis } from 'ioredis';
-import { checkRateLimit } from './rate-limit.js';
+import { applyDomainCooldown, checkRateLimit } from './rate-limit.js';
 
-// Mimics the Lua token-bucket script's math so checkRateLimit can be exercised
-// without a real Redis instance.
-function fakeRedisWithBucket(rate: number, burst: number): Redis {
+// Mimics the Lua token-bucket script's math (plus the cooldown key's
+// pttl/set) so checkRateLimit can be exercised without a real Redis instance.
+function fakeRedisWithBucket(rate: number, burst: number, cooldownMs = -2): Redis {
   let tokens = burst;
   let ts = Date.now();
+  let cooldown = cooldownMs;
 
   return {
     eval: vi.fn(async () => {
@@ -20,6 +21,11 @@ function fakeRedisWithBucket(rate: number, burst: number): Redis {
       }
       tokens -= 1;
       return 0;
+    }),
+    pttl: vi.fn(async () => cooldown),
+    set: vi.fn(async (_key: string, _value: string, _px: string, ms: number) => {
+      cooldown = ms;
+      return 'OK';
     }),
   } as unknown as Redis;
 }
@@ -40,5 +46,41 @@ describe('checkRateLimit', () => {
     // Next call has no token — should report a wait, not block.
     const waitMs = await checkRateLimit(redis, 'example.com', 10);
     expect(waitMs).toBeGreaterThan(0);
+  });
+
+  it('returns the cooldown remainder without touching the bucket while a cooldown is active', async () => {
+    const redis = fakeRedisWithBucket(10, 5, 4200);
+    await expect(checkRateLimit(redis, 'example.com', 10)).resolves.toBe(4200);
+    expect(redis.eval).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyDomainCooldown', () => {
+  it('uses the default when no Retry-After was provided', async () => {
+    const redis = fakeRedisWithBucket(1, 1);
+    await expect(applyDomainCooldown(redis, 'example.com')).resolves.toBe(30_000);
+  });
+
+  it('honors a server-requested delay within bounds', async () => {
+    const redis = fakeRedisWithBucket(1, 1);
+    await expect(applyDomainCooldown(redis, 'example.com', 90_000)).resolves.toBe(90_000);
+  });
+
+  it('clamps a hostile delay to the 15-minute ceiling', async () => {
+    const redis = fakeRedisWithBucket(1, 1);
+    await expect(applyDomainCooldown(redis, 'example.com', 24 * 3600 * 1000)).resolves.toBe(
+      15 * 60_000,
+    );
+  });
+
+  it('clamps a zero/garbage delay up to the 1s floor', async () => {
+    const redis = fakeRedisWithBucket(1, 1);
+    await expect(applyDomainCooldown(redis, 'example.com', 0)).resolves.toBe(1_000);
+  });
+
+  it('never shortens an existing longer cooldown', async () => {
+    const redis = fakeRedisWithBucket(1, 1, 60_000);
+    await expect(applyDomainCooldown(redis, 'example.com', 5_000)).resolves.toBe(60_000);
+    expect(redis.set).not.toHaveBeenCalled();
   });
 });

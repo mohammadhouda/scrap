@@ -18,6 +18,7 @@
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "prisma:seed": "dotenv -e ../../.env -- prisma db seed",
+    "prisma:seed-if-empty": "dotenv -e ../../.env -- tsx prisma/seed-if-empty.ts",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio"
   },
   "prisma": {

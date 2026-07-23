@@ -4,6 +4,7 @@ import { prisma } from '@scraper/db';
 import { cleanHtml, detectLanguage, extractTables } from '@scraper/processor';
 import { QUEUE_NAMES } from '@scraper/shared';
 import {
+  applyDomainCooldown,
   checkRateLimit,
   checkRobots,
   cheerioFetch,
@@ -11,6 +12,7 @@ import {
   isCrawlCancelled,
   persistVersion,
   playwrightFetch,
+  RateLimitedError,
   settleScrapeForRun,
 } from '@scraper/scraper';
 import { WORKER_CONCURRENCY } from './config.js';
@@ -62,7 +64,22 @@ export async function processScrapeJob(
     return { defer: waitMs };
   }
 
-  const result = source.renderJs ? await playwrightFetch(url) : await cheerioFetch(url);
+  let result;
+  try {
+    result = source.renderJs ? await playwrightFetch(url) : await cheerioFetch(url);
+  } catch (err) {
+    // The origin pushed back (429/503): open a shared cooldown for the whole
+    // domain — checkRateLimit surfaces it to every worker, so the fleet backs
+    // off, and this job's own retries defer against it too. Rethrowing keeps
+    // the normal attempt budget: a persistently-hostile URL still ends up in
+    // the DLQ after 5 attempts instead of bouncing forever.
+    if (err instanceof RateLimitedError) {
+      const hostname = new URL(url).hostname;
+      const cooldownMs = await applyDomainCooldown(connection, hostname, err.retryAfterMs);
+      console.warn(`[rate-limit] ${err.status} from ${hostname}, domain cooling down ${cooldownMs}ms`);
+    }
+    throw err;
+  }
 
   const { cleanedMd, title } = cleanHtml(result.html, url, result.title);
 

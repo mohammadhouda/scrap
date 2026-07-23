@@ -51,16 +51,17 @@ This means citation-checking a Q&A system's output for "does `[n]` point
 to a real retrieved chunk" is necessary but not sufficient for trusting
 the answer.
 
-## 3. No relevance threshold on retrieval
+## 3. ~~No relevance threshold on retrieval~~ (addressed)
 
-`keywordSearch`/`semanticSearch`/`hybridSearch` always return up to
-`topK` results regardless of how weak the match is — there's no minimum
-similarity/rank cutoff. Asked something with zero relevant crawled
-content ("What's the return policy for orders over $100?"), the retriever
-still returned 8 unrelated book chunks as context. The model handled this
-correctly in testing (declined to answer), but the design relies entirely
-on the LLM's judgment to ignore irrelevant context rather than the
-retrieval layer filtering it out before the prompt is built.
+**Addressed:** `semanticSearch` now applies a cosine-similarity floor
+(`DEFAULT_MIN_SIMILARITY` in `packages/rag/src/retrieve.ts`, overridable
+per call via `minSimilarity`), so a question with zero relevant indexed
+content yields zero semantic chunks and `/ask` answers "nothing found"
+from the retrieval layer instead of relying on the LLM to decline.
+Keyword search needs no floor — `websearch_to_tsquery` already requires a
+lexical match. Remaining caveat: the 0.25 default is a conservative
+constant, not tuned against a labeled relevance set; re-test the
+limitation-#1 compound questions after any retuning.
 
 ## 4. Cleaning pipeline falls back to raw HTML on some listing pages
 
@@ -86,10 +87,12 @@ indeterminate "Thinking..." state throughout, with no client-side timeout
 — a sufficiently slow response just keeps the user waiting rather than
 surfacing a timeout error.
 
-## 7. Horizontal scaling and chaos recovery are unvalidated as of this writing
+## 7. Horizontal scaling and chaos recovery: tooling built, numbers pending
 
-Phase 7 (`docker-compose.scale.yml`, `scripts/bench.ts`,
-`scripts/kill-worker.sh`) has not been built yet, so the "near-linear
-speedup" and "zero lost jobs under worker kill" claims in the plan are
-architectural intent, not yet measured results. See `docs/benchmarks.md`
-once populated.
+The Phase 7 harness now exists — `docker-compose.scale.yml`,
+`apps/worker/src/scripts/bench.ts` (throughput + lost-job check), and
+`scripts/kill-worker.sh` (SIGKILL a worker mid-crawl) — but the
+"near-linear speedup" and "zero lost jobs under worker kill" claims remain
+**unmeasured** until someone runs the procedure in `docs/benchmarks.md`
+and records the output there. That file deliberately contains no estimated
+numbers.

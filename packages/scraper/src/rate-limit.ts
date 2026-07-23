@@ -49,7 +49,45 @@ export async function checkRateLimit(
   domain: string,
   ratePerSecond: number,
 ): Promise<number> {
+  // A reactive cooldown (opened when the origin answered 429/503) overrides
+  // the proactive bucket: every worker sees it, so the whole fleet backs off
+  // the domain, not just the job that got the 429.
+  const cooldownRemaining = await redis.pttl(cooldownKey(domain));
+  if (cooldownRemaining > 0) return cooldownRemaining;
+
   const key = `ratelimit:${domain}`;
   const burst = Math.max(1, Math.ceil(ratePerSecond));
   return Number(await redis.eval(REFILL_SCRIPT, 1, key, ratePerSecond, burst, Date.now()));
+}
+
+function cooldownKey(domain: string): string {
+  return `ratelimit:cooldown:${domain}`;
+}
+
+// Bounds on the reactive cooldown: never shorter than 1s (a 0s/garbage
+// Retry-After shouldn't disable the cooldown), never longer than 15 min (a
+// hostile/broken header shouldn't park a domain for a day).
+const COOLDOWN_DEFAULT_MS = 30_000;
+const COOLDOWN_MIN_MS = 1_000;
+const COOLDOWN_MAX_MS = 15 * 60_000;
+
+/**
+ * Opens (or extends) the shared per-domain cooldown after the origin pushed
+ * back with 429/503. `requestedMs` comes from the Retry-After header when
+ * present; otherwise a conservative default applies. An existing longer
+ * cooldown is never shortened. Returns the cooldown now in effect (ms).
+ */
+export async function applyDomainCooldown(
+  redis: Redis,
+  domain: string,
+  requestedMs?: number,
+): Promise<number> {
+  const ms = Math.min(COOLDOWN_MAX_MS, Math.max(COOLDOWN_MIN_MS, requestedMs ?? COOLDOWN_DEFAULT_MS));
+
+  const key = cooldownKey(domain);
+  const remaining = await redis.pttl(key);
+  if (remaining >= ms) return remaining;
+
+  await redis.set(key, '1', 'PX', ms);
+  return ms;
 }

@@ -25,6 +25,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot: applies checked-in migrations, then seeds the demo sources —
+  # but only on a fresh/empty database (seed-if-empty.ts), so restarting the
+  # stack never wipes crawled data. api/worker wait for this to finish.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/scraper
+      REDIS_URL: redis://redis:6379
+    working_dir: /app/packages/db
+    command: sh -c "pnpm exec prisma migrate deploy && pnpm exec tsx prisma/seed-if-empty.ts"
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -42,6 +61,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -57,6 +78,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   web:
     build:
