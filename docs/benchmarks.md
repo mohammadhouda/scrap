@@ -68,17 +68,101 @@ is itself a finding worth recording.
 
 ## Results
 
-| Workers | Source / rate cap | Pages | Wall time | Pages/sec |
-|---|---|---|---|---|
-| 1 | _(pending)_ | | | |
-| 2 | _(pending)_ | | | |
-| 4 | _(pending)_ | | | |
+Measured **2026-07-23**. Environment: Docker Desktop on Windows 10, 12 CPUs /
+~3.9 GB RAM allocated to the Docker VM; `WORKER_CONCURRENCY=2` per container
+(the scale overlay's intent — a single container stays below the rate cap so
+added containers show speedup); `quotes-static` with its rate cap raised to
+**25 req/s** so the queue, not the token bucket, is the bottleneck; fetches to
+the live `quotes.toscrape.com` over a home connection (~0.3 s steady-state
+latency); OpenAI embeddings (`text-embedding-3-small`) indexing concurrently
+on the same workers. Each run was preceded by `prisma db seed` (fresh DB +
+flushed Redis) so all three crawled the same 214-page set. Completion is
+measured by quiescence (`settled == queued`, stable 6 s), not the run's status
+flag — see Finding 2.
+
+| Workers | Concurrency/worker | Pages | Crawl time | Pages/sec | Speedup | Lost-job check |
+|---|---|---|---|---|---|---|
+| 1 | 2 | 214 | 52.8 s | 4.05 | 1.00× | settled 214 == queued 214 ✓ |
+| 2 | 2 | 214 | 30.6 s | 6.99 | 1.73× | settled 214 == queued 214 ✓ |
+| 4 | 2 | 214 | 19.4 s | 11.03 | 2.72× | settled 214 == queued 214 ✓ |
+
+Throughput scales monotonically with worker count but **sublinearly** (2.72×
+at 4×). None of the runs was rate-cap-bound (11 pages/s « 25 req/s cap), so the
+gap is real overhead, dominated by:
+
+- **A hot `CrawlRun` row.** Every reserve does `UPDATE "CrawlRun" SET
+  "pagesQueued" = pagesQueued + 1` and every settle does the same for
+  `pagesDone`, all on the *one* row for the run. With more workers these
+  serialize on that row's lock — a self-inflicted scaling ceiling independent
+  of the target site. Batched or per-worker-sharded counters would relax it.
+- Shared per-domain token-bucket coordination (one Redis key, one Lua eval per
+  fetch) and concurrent indexing sharing each worker's event loop.
 
 ### Chaos run
 
 | Scenario | Outcome |
 |---|---|
-| SIGKILL 1 of 4 workers mid-crawl | _(pending — record: pages settled vs queued, extra wall time, whether the reconciler was needed)_ |
+| SIGKILL 1 of 4 workers mid-crawl (killed at 20/83 pages) | **Lost job.** The run got stuck `RUNNING` at **213/214** indefinitely. All queues drained empty (scrape/discover/index: 0 wait/active/delayed/failed); Redis showed `seen`=214, `settled`=213, `outstanding`=1. One URL was reserved but its scrape job was never enqueued, so nothing reprocessed it. BullMQ stalled-job detection did **not** recover it (there was no job to reclaim). Only the scheduler's 30-min stale reconciler would eventually force-finalize the *run* — but that page stays uncrawled. See Finding 3. |
 
-Environment to record with results: host CPU/RAM, Docker resource limits,
-`WORKER_CONCURRENCY`, network conditions, date.
+This is a **negative result**: the "zero lost jobs under worker kill" claim in
+the plan does **not** hold as implemented. The chaos harness did its job —
+it found a real fault-tolerance bug (Finding 3).
+
+## Findings (what running Phase 7 surfaced)
+
+### Finding 1 — indexing was completely broken (FIXED)
+
+Every `index` job failed with `APIConnectionError` →
+`InvalidArgumentError: invalid content-length header`. Root cause: importing
+`@scraper/processor` pulls in jsdom (via `@mozilla/readability`), which calls
+undici's `setGlobalDispatcher` at import time, installing a *userland*
+`undici@7.28.0` Agent (hoisted from cheerio) as the process-wide dispatcher.
+From then on every `globalThis.fetch` — including the OpenAI SDK's — is
+dispatched through that stricter undici, which rejects the manual
+`content-length` header the SDK sets on POST bodies (Node's built-in undici
+tolerates it). Because every worker loads the processor, **no embeddings were
+ever produced** on the freshly built image.
+
+Diagnosis was by bisection inside the container: the global dispatcher symbol
+(`Symbol.for('undici.globalDispatcher.1')`) is `undefined` at startup and
+becomes an `Agent` immediately after `import('@scraper/processor')`.
+
+**Fix (`packages/rag/src/openai-fetch.ts`):** wrap the OpenAI client's `fetch`
+to strip `content-length` and let the active dispatcher recompute it — safe
+and dispatcher-agnostic. Applied to both `embed.ts` and `ask.ts`. Verified
+in-container: the embedder returns 1536-dim vectors even after the processor
+import installs the Agent.
+
+### Finding 2 — premature crawl-run finalization (race; eventually consistent)
+
+On a clean run the run's status flips to `SUCCEEDED` *before* the crawl
+actually finishes. Observed every run (e.g. worker=1 reported `SUCCEEDED` at
+46.7 s with 184/214 pages, then kept crawling to 214/214 by ~53 s).
+
+Cause: a scrape job enqueues its `discover` job and then settles (decrementing
+`outstanding`), but the discovered children aren't reserved (incrementing
+`outstanding`) until that async discover job runs later. If `outstanding`
+transiently reaches 0 in that gap near the end of a crawl,
+`settleScrapeForRun` finalizes the run early. Counters are *eventually*
+consistent (no data lost on a clean run), but the "finalizes with
+`settled == queued`" invariant does not hold at the instant of finalization —
+so consumers watching `status` (a UI, or a naive bench) see "done" while work
+continues. `bench.ts` measures quiescence instead to work around this.
+
+### Finding 3 — a job is lost when a worker is SIGKILLed (NOT yet fixed)
+
+`processDiscoverJob` does two non-atomic steps per URL: `reserveUrlForRun`
+(Redis `SADD seen` + `INCR outstanding` + Postgres `pagesQueued++`) and then
+`queues.scrape.add(...)`. A SIGKILL between them leaves the URL *reserved* but
+with no scrape job — and when the discover job is retried, `reserveUrlForRun`
+returns false (already in `seen`), so the scrape job is never created. The URL
+is orphaned: `outstanding` never returns to 0, the run never finalizes
+normally, and the page is never crawled. Reproduced above (stuck 213/214,
+`outstanding`=1, all queues empty).
+
+Findings 2 and 3 share a root cause: the crawl-run bookkeeping (`seen` /
+`outstanding` / `pagesQueued`) is spread across multiple non-atomic
+Redis + Postgres + queue operations, so a crash or a scheduling gap between
+them breaks the invariant. A correct fix makes reserve-and-enqueue atomic (or
+idempotently recoverable) and counts an in-flight discover job as outstanding
+work — a deliberate change to the coordination core, tracked as follow-up.

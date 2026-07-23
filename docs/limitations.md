@@ -87,12 +87,27 @@ indeterminate "Thinking..." state throughout, with no client-side timeout
 — a sufficiently slow response just keeps the user waiting rather than
 surfacing a timeout error.
 
-## 7. Horizontal scaling and chaos recovery: tooling built, numbers pending
+## 7. Horizontal scaling measured; chaos recovery FAILED (lost job under kill)
 
-The Phase 7 harness now exists — `docker-compose.scale.yml`,
-`apps/worker/src/scripts/bench.ts` (throughput + lost-job check), and
-`scripts/kill-worker.sh` (SIGKILL a worker mid-crawl) — but the
-"near-linear speedup" and "zero lost jobs under worker kill" claims remain
-**unmeasured** until someone runs the procedure in `docs/benchmarks.md`
-and records the output there. That file deliberately contains no estimated
-numbers.
+Phase 7 was run (2026-07-23, see `docs/benchmarks.md` for full numbers):
+
+- **Scaling holds, sublinearly.** `quotes-static` (214 pages, rate cap
+  raised to 25 req/s) crawled in 52.8 s / 30.6 s / 19.4 s at 1 / 2 / 4
+  workers — 4.05 → 6.99 → 11.03 pages/s (1.00× / 1.73× / 2.72×). The gap
+  from linear is dominated by a hot `CrawlRun` counter row every reserve and
+  settle updates, which serializes across workers.
+- **Chaos recovery does NOT hold as implemented.** SIGKILLing 1 of 4 workers
+  mid-crawl left the run stuck at 213/214 with one URL orphaned (reserved but
+  never enqueued as a scrape job). `reserveUrlForRun` + `queues.scrape.add`
+  in `processDiscoverJob` are not atomic, so a crash between them loses the
+  job; BullMQ's stalled-job detection can't recover it because no job exists
+  to reclaim. The "zero lost jobs under worker kill" claim is currently false.
+
+Two coordination bugs were found and one more was fixed along the way:
+- **(fixed)** indexing was fully broken — jsdom's `setGlobalDispatcher`
+  routed the OpenAI SDK through a strict undici that rejected its
+  `content-length`; see `docs/benchmarks.md` Finding 1 and
+  `packages/rag/src/openai-fetch.ts`.
+- **(open)** premature run finalization (Finding 2) and the lost-job race
+  (Finding 3) both stem from non-atomic crawl-run bookkeeping and need a
+  coordination-core fix.
