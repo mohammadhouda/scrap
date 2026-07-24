@@ -25,7 +25,11 @@ RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ .
 COPY tsconfig.base.json ./tsconfig.base.json
 RUN pnpm turbo run build --filter=@scraper/worker...
-RUN pnpm --filter @scraper/scraper exec playwright install chromium
+RUN for i in 1 2 3 4 5; do \
+      pnpm --filter @scraper/scraper exec playwright install chromium && break; \
+      [ "$i" = 5 ] && echo "playwright install failed after 5 attempts" && exit 1; \
+      echo "playwright install attempt $i failed, retrying in 10s..."; sleep 10; \
+    done
 
 FROM base AS runner
 WORKDIR /app
