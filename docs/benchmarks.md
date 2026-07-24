@@ -100,13 +100,17 @@ gap is real overhead, dominated by:
 
 ### Chaos run
 
-| Scenario | Outcome |
-|---|---|
-| SIGKILL 1 of 4 workers mid-crawl (killed at 20/83 pages) | **Lost job.** The run got stuck `RUNNING` at **213/214** indefinitely. All queues drained empty (scrape/discover/index: 0 wait/active/delayed/failed); Redis showed `seen`=214, `settled`=213, `outstanding`=1. One URL was reserved but its scrape job was never enqueued, so nothing reprocessed it. BullMQ stalled-job detection did **not** recover it (there was no job to reclaim). Only the scheduler's 30-min stale reconciler would eventually force-finalize the *run* — but that page stays uncrawled. See Finding 3. |
+Two runs, before and after the coordination fixes (Findings 3 + 3b):
 
-This is a **negative result**: the "zero lost jobs under worker kill" claim in
-the plan does **not** hold as implemented. The chaos harness did its job —
-it found a real fault-tolerance bug (Finding 3).
+| Run | Scenario | Outcome |
+|---|---|---|
+| **Before** (2026-07-23) | SIGKILL 1 of 4 workers mid-crawl (killed at 20/83 pages) | **Lost job.** Run stuck `RUNNING` at **213/214** indefinitely. All queues drained empty; Redis `seen`=214, `settled`=213, `outstanding`=1. One URL was reserved but its scrape job was never enqueued, so nothing reprocessed it; BullMQ stalled-job detection couldn't recover it (no job to reclaim). |
+| **After** (2026-07-25) | SIGKILL 1 of 4 workers mid-crawl (killed at done=23, rate cap 6 req/s for a wider window) | **No lost job.** Crawl completed 214/214, `settled 214 == queued 214 → OK`, bench exit 0. Both stores agree: Postgres `q=214 d=214 f=0 SUCCEEDED`, Redis `seen=enqueued=settled=214`. Took 67.3 s (vs ~36 s clean) — the killed worker's in-flight jobs waited ~30 s for BullMQ stalled-recovery, then the discover retry re-drove the orphaned URL. |
+
+The "before" run was a **negative result** that did its job — the chaos harness
+found two real fault-tolerance bugs (Findings 3 and 3b). The "after" run, on a
+rebuilt image carrying both fixes, is **green**: zero lost jobs under worker
+kill, verified end-to-end.
 
 ## Findings (what running Phase 7 surfaced)
 
@@ -167,7 +171,7 @@ them breaks the invariant. A correct fix makes reserve-and-enqueue atomic (or
 idempotently recoverable) and counts an in-flight discover job as outstanding
 work — a deliberate change to the coordination core, tracked as follow-up.
 
-### Finding 3 — fix (code-complete 2026-07-24; live chaos re-run pending)
+### Finding 3 — fix (VERIFIED end-to-end 2026-07-25)
 
 The lost-job race is closed by making the discover job's per-URL work
 **idempotently recoverable** rather than atomic (cross-store atomicity between
@@ -189,10 +193,29 @@ new `confirmUrlEnqueued`) and `apps/worker/src/discover-worker.ts`.
 
 Covered by a unit test that reproduces the reserve-then-crash sequence and
 asserts the retry re-drives the enqueue without double-counting
-(`crawl-run.test.ts` → "recovers a lost job"). The end-to-end chaos re-run
-(SIGKILL 1 of 4 workers, expect `settled == queued`) still needs to be run
-against a rebuilt image to confirm the negative result above is now green;
-until then this is verified at the unit level only.
+(`crawl-run.test.ts` → "recovers a lost job"), **and verified end-to-end** by
+the "after" chaos run above: SIGKILL 1 of 4 workers mid-crawl, crawl completed
+214/214, both stores agreeing (`seen=enqueued=settled=214`, Postgres
+`q=214 d=214 f=0`).
+
+### Finding 3b — pagesQueued undercount exposed by the recovery (FIXED)
+
+The first post-fix chaos run recovered the job (no page lost) but reported
+Postgres `pagesQueued=213` while `pagesDone=214` — a *false* "lost job" that
+hung the bench's `settled == pagesQueued` check. Root cause: `reserveUrlForRun`
+does the Redis reservation (`seen` + `outstanding`) and the Postgres
+`pagesQueued++` as two non-atomic steps. A SIGKILL between them commits the
+Redis side but not the Postgres increment; the recovery path re-drives the
+enqueue but not that increment, so `pagesQueued` stays one short forever even
+though every page is crawled. `outstanding` (Redis) is unaffected, so the run
+still finalizes correctly — only the denormalized display counter drifts.
+
+**Fix (`settleScrapeForRun`):** at finalization (outstanding → 0), reconcile
+`pagesQueued` to the authoritative `SCARD(seen)` instead of trusting the
+drifted per-reserve increment. At finalization `settled == seen`, so
+`pagesQueued` must equal `|seen|`. Unit-tested (`crawl-run.test.ts` →
+"reconciles pagesQueued from `seen` at finalize"); confirmed by the green
+"after" chaos run (`queued=214`, `settled == queued → OK`).
 
 Finding 2 (premature finalization on a *clean* run) is a separate, weaker
 symptom of the same subsystem — eventually consistent, no data lost, and

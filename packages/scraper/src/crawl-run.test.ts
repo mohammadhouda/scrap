@@ -49,6 +49,7 @@ function fakeRedis() {
       return had ? 0 : 1;
     }),
     sismember: vi.fn(async (key: string, member: string) => (sets.get(key)?.has(member) ? 1 : 0)),
+    scard: vi.fn(async (key: string) => sets.get(key)?.size ?? 0),
     incr: vi.fn(async (key: string) => {
       const next = (counters.get(key) ?? 0) + 1;
       counters.set(key, next);
@@ -159,7 +160,8 @@ describe('crawl-run bookkeeping', () => {
     await settleScrapeForRun(redis, 'run-1', 'https://x.com/b', 'done');
     expect(crawlRunUpdateMany).toHaveBeenCalledWith({
       where: { id: 'run-1', status: 'RUNNING' },
-      data: { status: 'SUCCEEDED', finishedAt: expect.any(Date) },
+      // pagesQueued reconciled from the `seen` set (2 URLs reserved above).
+      data: { status: 'SUCCEEDED', finishedAt: expect.any(Date), pagesQueued: 2 },
     });
   });
 
@@ -181,6 +183,27 @@ describe('crawl-run bookkeeping', () => {
     expect(crawlRunUpdateMany).toHaveBeenCalledTimes(1);
   });
 
+  it('reconciles pagesQueued from `seen` at finalize, correcting crash-gap drift', async () => {
+    const redis = fakeRedis();
+    crawlRunFindUnique.mockResolvedValue({ id: 'run-1', pagesDone: 1, pagesFailed: 0 });
+
+    // Reserve one URL normally: outstanding = 1, seen = {a}, pagesQueued++ once.
+    await reserveUrlForRun(redis, 'run-1', 'https://x.com/a');
+
+    // Model the crash-gap: another URL made it into `seen` (its Redis
+    // reservation committed) but its Postgres pagesQueued++ was lost. Its
+    // outstanding was already counted, so it does not add a second unit here.
+    await redis.sadd('crawl:run-1:seen', 'hash-of-b');
+
+    // The single outstanding unit settles -> run finalizes. pagesQueued must be
+    // reconciled to |seen| = 2, not the drifted Postgres increment count of 1.
+    await settleScrapeForRun(redis, 'run-1', 'https://x.com/a', 'done');
+
+    const finalize = crawlRunUpdateMany.mock.calls.at(-1)?.[0];
+    expect(finalize?.data.pagesQueued).toBe(2);
+    expect(finalize?.data.status).toBe('SUCCEEDED');
+  });
+
   it('finalizes as FAILED when no page succeeded', async () => {
     const redis = fakeRedis();
     crawlRunFindUnique.mockResolvedValue({ id: 'run-1', pagesDone: 0, pagesFailed: 1 });
@@ -190,7 +213,7 @@ describe('crawl-run bookkeeping', () => {
 
     expect(crawlRunUpdateMany).toHaveBeenCalledWith({
       where: { id: 'run-1', status: 'RUNNING' },
-      data: { status: 'FAILED', finishedAt: expect.any(Date) },
+      data: { status: 'FAILED', finishedAt: expect.any(Date), pagesQueued: 1 },
     });
   });
 

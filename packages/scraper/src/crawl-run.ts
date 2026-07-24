@@ -117,12 +117,13 @@ export async function settleScrapeForRun(
   const finalStatus =
     run && run.pagesDone > 0 ? CrawlStatus.SUCCEEDED : CrawlStatus.FAILED;
 
+  const seenCount = await redis.scard(seenKey(crawlRunId));
+
   await prisma.crawlRun.updateMany({
     where: { id: crawlRunId, status: CrawlStatus.RUNNING },
-    data: { status: finalStatus, finishedAt: new Date() },
+    data: { status: finalStatus, finishedAt: new Date(), pagesQueued: seenCount },
   });
 
-  
   await redis.del(outstandingKey(crawlRunId));
 }
 
