@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { QUEUE_NAMES } from '@scraper/shared';
-import { reserveUrlForRun, scrapeJobId, sha256 } from '@scraper/scraper';
+import { confirmUrlEnqueued, reserveUrlForRun, scrapeJobId, sha256 } from '@scraper/scraper';
 import { WORKER_CONCURRENCY } from './config.js';
 import type { Queues } from './queues.js';
 
@@ -22,13 +22,18 @@ export async function processDiscoverJob(queues: Queues, redis: Redis, data: Dis
   let enqueued = 0;
   for (const url of urls) {
     if (crawlRunId) {
-      const reserved = await reserveUrlForRun(redis, crawlRunId, url);
-      if (!reserved) continue;
+      const shouldEnqueue = await reserveUrlForRun(redis, crawlRunId, url);
+      if (!shouldEnqueue) continue;
+      // Enqueue then confirm, in that order: a crash between reserve and this
+      // add leaves the URL recoverable (reserveUrlForRun returns true again on
+      // the discover job's retry); the deterministic jobId makes a re-add after
+      // a crash-before-confirm a harmless no-op.
       await queues.scrape.add(
         'scrape',
         { sourceId, url, depth, crawlRunId },
         { jobId: scrapeJobId(crawlRunId, url) },
       );
+      await confirmUrlEnqueued(redis, crawlRunId, url);
     } else {
       await queues.scrape.add('scrape', { sourceId, url, depth }, { jobId: sha256(url) });
     }

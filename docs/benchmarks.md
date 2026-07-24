@@ -166,3 +166,35 @@ Redis + Postgres + queue operations, so a crash or a scheduling gap between
 them breaks the invariant. A correct fix makes reserve-and-enqueue atomic (or
 idempotently recoverable) and counts an in-flight discover job as outstanding
 work — a deliberate change to the coordination core, tracked as follow-up.
+
+### Finding 3 — fix (code-complete 2026-07-24; live chaos re-run pending)
+
+The lost-job race is closed by making the discover job's per-URL work
+**idempotently recoverable** rather than atomic (cross-store atomicity between
+Redis and BullMQ isn't available). `reserveUrlForRun` now distinguishes two
+per-run sets:
+
+- `seen` — URLs counted toward `outstanding`/`pagesQueued` (once each).
+- `enqueued` — URLs whose scrape job has been *confirmed created*.
+
+A URL is only skipped as a true duplicate when it is in **both** sets. If it's
+in `seen` but not `enqueued` — exactly the state a SIGKILL between reserve and
+`queues.scrape.add` leaves behind — `reserveUrlForRun` returns `true` again, so
+the discover job's BullMQ retry re-creates the scrape job. The deterministic
+`scrapeJobId` makes a re-add after a crash-before-confirm a harmless no-op, and
+because `outstanding` was incremented on the *first* sighting only, the orphan
+keeps the run open (never premature-finalizes) until the recovered scrape
+settles. See `packages/scraper/src/crawl-run.ts` (`reserveUrlForRun` +
+new `confirmUrlEnqueued`) and `apps/worker/src/discover-worker.ts`.
+
+Covered by a unit test that reproduces the reserve-then-crash sequence and
+asserts the retry re-drives the enqueue without double-counting
+(`crawl-run.test.ts` → "recovers a lost job"). The end-to-end chaos re-run
+(SIGKILL 1 of 4 workers, expect `settled == queued`) still needs to be run
+against a rebuilt image to confirm the negative result above is now green;
+until then this is verified at the unit level only.
+
+Finding 2 (premature finalization on a *clean* run) is a separate, weaker
+symptom of the same subsystem — eventually consistent, no data lost, and
+`bench.ts` already measures quiescence to sidestep it — so it is left as a
+tracked follow-up.

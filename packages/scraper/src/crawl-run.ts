@@ -10,6 +10,10 @@ function seenKey(crawlRunId: string): string {
   return `crawl:${crawlRunId}:seen`;
 }
 
+function enqueuedKey(crawlRunId: string): string {
+  return `crawl:${crawlRunId}:enqueued`;
+}
+
 function outstandingKey(crawlRunId: string): string {
   return `crawl:${crawlRunId}:outstanding`;
 }
@@ -45,8 +49,15 @@ export async function reserveUrlForRun(
   // discovery fan-out halts even though already-queued jobs still drain.
   if (await redis.exists(cancelledKey(crawlRunId))) return false;
 
-  const added = await redis.sadd(seenKey(crawlRunId), sha256(url));
-  if (added === 0) return false;
+  const hash = sha256(url);
+  const added = await redis.sadd(seenKey(crawlRunId), hash);
+
+  if (added === 0) {
+    // Already counted on a prior attempt. Enqueue only if its scrape job was
+    // never confirmed — i.e. a crash happened between reserve and enqueue.
+    const confirmed = await redis.sismember(enqueuedKey(crawlRunId), hash);
+    return confirmed === 0;
+  }
 
   await redis
     .multi()
@@ -61,6 +72,21 @@ export async function reserveUrlForRun(
   });
 
   return true;
+}
+
+// Mark a URL's scrape job as confirmed-created. Called by the discover worker
+// *after* queues.scrape.add succeeds, so a crash before this point leaves the
+// URL recoverable (reserveUrlForRun will return true again on retry).
+export async function confirmUrlEnqueued(
+  redis: Redis,
+  crawlRunId: string,
+  url: string,
+): Promise<void> {
+  await redis
+    .multi()
+    .sadd(enqueuedKey(crawlRunId), sha256(url))
+    .expire(enqueuedKey(crawlRunId), KEY_TTL_SECONDS)
+    .exec();
 }
 
 export async function settleScrapeForRun(
@@ -148,7 +174,13 @@ export async function reconcileStaleRuns(
 
   if (redis && rows.length > 0) {
     for (const { id } of rows) {
-      await redis.del(outstandingKey(id), seenKey(id), settledKey(id), cancelledKey(id));
+      await redis.del(
+        outstandingKey(id),
+        seenKey(id),
+        enqueuedKey(id),
+        settledKey(id),
+        cancelledKey(id),
+      );
     }
   }
 

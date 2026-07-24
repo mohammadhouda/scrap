@@ -23,8 +23,14 @@ vi.mock('@scraper/db', () => ({
   CrawlStatus: { RUNNING: 'RUNNING', SUCCEEDED: 'SUCCEEDED', FAILED: 'FAILED', CANCELLED: 'CANCELLED' },
 }));
 
-const { reserveUrlForRun, settleScrapeForRun, cancelCrawlRun, reconcileStaleRuns, scrapeJobId } =
-  await import('./crawl-run.js');
+const {
+  reserveUrlForRun,
+  confirmUrlEnqueued,
+  settleScrapeForRun,
+  cancelCrawlRun,
+  reconcileStaleRuns,
+  scrapeJobId,
+} = await import('./crawl-run.js');
 
 // Minimal in-memory Redis fake: SADD (set semantics), INCR/DECR counters,
 // string keys (set/exists/del), and no-op EXPIRE — enough to exercise the
@@ -42,6 +48,7 @@ function fakeRedis() {
       sets.set(key, set);
       return had ? 0 : 1;
     }),
+    sismember: vi.fn(async (key: string, member: string) => (sets.get(key)?.has(member) ? 1 : 0)),
     incr: vi.fn(async (key: string) => {
       const next = (counters.get(key) ?? 0) + 1;
       counters.set(key, next);
@@ -72,6 +79,12 @@ function fakeRedis() {
           counters.set(key, (counters.get(key) ?? 0) + 1);
           return chain;
         },
+        sadd: (key: string, member: string) => {
+          const set = sets.get(key) ?? new Set<string>();
+          set.add(member);
+          sets.set(key, set);
+          return chain;
+        },
         expire: () => chain,
         exec: async () => [],
       };
@@ -94,6 +107,8 @@ describe('crawl-run bookkeeping', () => {
     const redis = fakeRedis();
 
     const first = await reserveUrlForRun(redis, 'run-1', 'https://x.com/a');
+    await confirmUrlEnqueued(redis, 'run-1', 'https://x.com/a');
+    // Second sighting, now that its scrape job is confirmed, is a true duplicate.
     const second = await reserveUrlForRun(redis, 'run-1', 'https://x.com/a');
 
     expect(first).toBe(true);
@@ -104,6 +119,30 @@ describe('crawl-run bookkeeping', () => {
       where: { id: 'run-1' },
       data: { pagesQueued: { increment: 1 } },
     });
+  });
+
+  it('recovers a lost job: re-drives enqueue for a reserved-but-unconfirmed URL', async () => {
+    const redis = fakeRedis();
+
+    // First attempt reserves (counts) the URL, then the worker is SIGKILLed
+    // before it can enqueue the scrape job -> confirmUrlEnqueued never runs.
+    const first = await reserveUrlForRun(redis, 'run-1', 'https://x.com/a');
+
+    // The discover job is retried by BullMQ. The URL is already in `seen`, but
+    // its scrape job was never confirmed, so reserve must return true again so
+    // the retry re-creates the (idempotent, deterministic-jobId) scrape job.
+    const retry = await reserveUrlForRun(redis, 'run-1', 'https://x.com/a');
+
+    expect(first).toBe(true);
+    expect(retry).toBe(true);
+    // But it must NOT be double-counted: pagesQueued + outstanding move once.
+    expect(crawlRunUpdate).toHaveBeenCalledTimes(1);
+
+    // After the retry confirms the enqueue, a further sighting is a no-op.
+    await confirmUrlEnqueued(redis, 'run-1', 'https://x.com/a');
+    const afterConfirm = await reserveUrlForRun(redis, 'run-1', 'https://x.com/a');
+    expect(afterConfirm).toBe(false);
+    expect(crawlRunUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('finalizes the run as SUCCEEDED once outstanding reaches zero', async () => {
@@ -187,7 +226,7 @@ describe('crawl-run bookkeeping', () => {
 
     expect(count).toBe(2);
     expect(queryRaw).toHaveBeenCalledTimes(1);
-    // Each reconciled run's per-run keys are cleared (4 keys × 2 runs).
+    // Each reconciled run's per-run keys are cleared (5 keys × 2 runs).
     expect(redis.del).toHaveBeenCalledTimes(2);
   });
 

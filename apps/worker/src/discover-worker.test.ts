@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { reserveUrlForRun } = vi.hoisted(() => ({ reserveUrlForRun: vi.fn() }));
+const { reserveUrlForRun, confirmUrlEnqueued } = vi.hoisted(() => ({
+  reserveUrlForRun: vi.fn(),
+  confirmUrlEnqueued: vi.fn(),
+}));
 vi.mock('@scraper/scraper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@scraper/scraper')>();
-  return { ...actual, reserveUrlForRun };
+  return { ...actual, reserveUrlForRun, confirmUrlEnqueued };
 });
 
 const { processDiscoverJob } = await import('./discover-worker.js');
@@ -79,5 +82,9 @@ describe('processDiscoverJob', () => {
       { sourceId: 'source-1', url: 'https://example.com/a', depth: 1, crawlRunId: 'run-1' },
       expect.objectContaining({ jobId: expect.stringMatching(/^run-1-/) }),
     );
+    // The enqueue is only confirmed for the URL that was actually enqueued, and
+    // only after its scrape job was added (closing the lost-job race).
+    expect(confirmUrlEnqueued).toHaveBeenCalledTimes(1);
+    expect(confirmUrlEnqueued).toHaveBeenCalledWith(redis, 'run-1', 'https://example.com/a');
   });
 });
