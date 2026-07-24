@@ -74,15 +74,34 @@ docker compose up -d postgres redis
 pnpm --filter @scraper/db run prisma:migrate
 
 # seeds the 3 demo sources (quotes.toscrape.com static + JS, books.toscrape.com)
-pnpm --filter @scraper/db exec prisma db seed
+# also clears existing rows + flushes Redis, so DB and queues never drift apart
+pnpm --filter @scraper/db run prisma:seed
 
 pnpm dev                      # runs api + worker + web + scheduler via turbo
 ```
 
+> Always use the `run prisma:*` scripts (not `exec prisma ...`) for anything
+> under `packages/db` — the scripts load the root `.env` via `dotenv-cli`,
+> whereas `exec prisma db seed` / `exec prisma migrate` run Prisma directly and
+> fail with `Environment variable not found: DATABASE_URL`.
+
 This gives you:
 - API at **http://localhost:4000** (`API_PORT` in `.env`)
 - Web UI at **http://localhost:3000** (`WEB_PORT` in `.env`)
-- Admin login token = whatever `ADMIN_TOKEN` is set to in `.env`
+
+### Admin access
+
+The operator pages (`/admin` — dashboard, sources, dead-letter queue, version
+diffs) are gated by a token. To log in:
+
+1. Open `.env` and find `ADMIN_TOKEN` (it starts as the `change-me` placeholder
+   copied from `.env.example` — set it to any value you like).
+2. Go to **http://localhost:3000/admin**, and paste that exact `ADMIN_TOKEN`
+   value into the login prompt.
+
+The same token also authorizes the API's `/admin/*` and write routes (via an
+`Authorization: Bearer <ADMIN_TOKEN>` header). Restart the API after changing
+it so the new value takes effect.
 
 > **Windows note:** `pnpm dev`'s `tsx watch` processes and the Prisma CLI
 > both need env vars loaded from the root `.env`; every relevant script
@@ -144,6 +163,7 @@ results table.
 | `pnpm build` | Production build of every app/package |
 | `pnpm --filter @scraper/db run prisma:studio` | Browse the database (Prisma Studio) |
 | `pnpm --filter @scraper/db run prisma:deploy` | Apply checked-in migrations (safe, no drift diff) |
+| `pnpm --filter @scraper/db run prisma:seed` | Reset: clear all rows, flush Redis, reseed demo sources |
 | `pnpm --filter @scraper/api exec vitest run` | Run just the API's test suite |
 | `pnpm --filter @scraper/worker run crawl` | Manually enqueue a crawl (see `apps/worker/src/scripts`) |
 
