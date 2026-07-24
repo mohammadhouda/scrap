@@ -58,6 +58,44 @@ describe('cleanHtml', () => {
     expect(result.cleanedMd.trim().length).toBeGreaterThan(0);
   });
 
+  it('strips HTML comments (incl. ones hiding markup) from both extraction paths', () => {
+    // Verbatim shape of the comment books.toscrape.com product pages ship --
+    // a whole anchor block commented out. It must never reach cleanedMd.
+    const commented = `
+      <!--
+        <a id="write_review" href="/catalogue/x/reviews/add/#addreview" class="btn btn-success btn-sm">
+          Write a review
+        </a>
+      -->`;
+
+    // Fallback path (short/listing page Readability can't parse).
+    const listing = `
+      <html><body>
+        <ul><li>Item one</li><li>Item two</li></ul>
+        ${commented}
+      </body></html>`;
+    const fallback = cleanHtml(listing, 'https://example.com/listing', 'Listing');
+    expect(fallback.cleanedMd).toContain('Item one');
+    expect(fallback.cleanedMd).not.toContain('write_review');
+    expect(fallback.cleanedMd).not.toContain('btn btn-success');
+    expect(fallback.cleanedMd).not.toContain('<!--');
+
+    // Readability path (long-form article page) -- comment sits alongside the
+    // article body and must be gone there too.
+    const article = `
+      <html><head><title>Real Article</title></head><body>
+        <article>
+          <h1>Real Article</h1>
+          <p>${'This is a long enough paragraph of real article content to satisfy Readability heuristics. '.repeat(6)}</p>
+          ${commented}
+        </article>
+      </body></html>`;
+    const parsed = cleanHtml(article, 'https://example.com/article', 'Real Article');
+    expect(parsed.cleanedMd).toContain('real article content');
+    expect(parsed.cleanedMd).not.toContain('write_review');
+    expect(parsed.cleanedMd).not.toContain('<!--');
+  });
+
   it('strips tables from the markdown (they are captured separately by extractTables)', () => {
     const html = `
       <html>

@@ -51,41 +51,6 @@ This means citation-checking a Q&A system's output for "does `[n]` point
 to a real retrieved chunk" is necessary but not sufficient for trusting
 the answer.
 
-## 3. ~~No relevance threshold on retrieval~~ (addressed)
-
-**Addressed:** `semanticSearch` now applies a cosine-similarity floor
-(`DEFAULT_MIN_SIMILARITY` in `packages/rag/src/retrieve.ts`, overridable
-per call via `minSimilarity`), so a question with zero relevant indexed
-content yields zero semantic chunks and `/ask` answers "nothing found"
-from the retrieval layer instead of relying on the LLM to decline.
-Keyword search needs no floor — `websearch_to_tsquery` already requires a
-lexical match. Remaining caveat: the 0.25 default is a conservative
-constant, not tuned against a labeled relevance set; re-test the
-limitation-#1 compound questions after any retuning.
-
-## 4. Cleaning pipeline falls back to raw HTML on some listing pages
-
-`packages/processor/clean.ts` falls back to raw body extraction when
-Readability can't identify an article on non-article (listing/catalog)
-pages. On some `books.toscrape.com` category pages this leaves literal
-HTML comments and tags (`<!-- <a id="write_review" ... -->`) inside
-`cleanedMd`, which then get chunked and indexed as-is — visible directly
-in `/search` results for keyword/hybrid queries against those pages.
-Content is not lost or corrupted, but not fully cleaned either.
-
-## 5. `/ask` is single-turn
-
-Each question is answered independently — there's no conversation history
-passed to the model, so follow-up questions like "what else did they say"
-have no prior context to resolve against.
-
-## 6. GPT-5.5 response latency is highly variable
-
-Observed time-to-first-token ranged from under a second to 70+ seconds
-across otherwise-identical requests during testing. The UI shows an
-indeterminate "Thinking..." state throughout, with no client-side timeout
-— a sufficiently slow response just keeps the user waiting rather than
-surfacing a timeout error.
 
 ## 7. Horizontal scaling measured; chaos recovery FAILED (lost job under kill)
 
