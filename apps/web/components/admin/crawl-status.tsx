@@ -20,7 +20,7 @@ export function CrawlStatusCell({ run }: { run: CrawlRun | null }) {
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col items-start gap-1">
       <Badge variant={STATUS_VARIANT[run.status]}>{run.status.toLowerCase()}</Badge>
       <span className="text-xs text-zinc-500">
         {/* pagesDone (not done+failed) over the total, so the numerator is the
