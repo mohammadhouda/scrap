@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { decodeHtml } from './charset.js';
-import { parseRetryAfterMs, RateLimitedError } from './errors.js';
+import { parseRetryAfterMs, RateLimitedError, UnsupportedContentTypeError } from './errors.js';
 import type { FetchResult } from './fetch-result.js';
 import { USER_AGENT } from './robots.js';
 
@@ -67,7 +67,7 @@ export async function cheerioFetch(url: string): Promise<FetchResult> {
 
   const contentType = response.headers.get('content-type');
   if (!isHtml(contentType)) {
-    throw new Error(`unsupported content-type "${contentType}" for ${url}`);
+    throw new UnsupportedContentTypeError(url, contentType);
   }
 
   const html = decodeHtml(await readCapped(response), contentType);

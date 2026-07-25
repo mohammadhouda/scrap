@@ -14,6 +14,20 @@ export class RateLimitedError extends Error {
   }
 }
 
+// Thrown by the fetch layer when the response isn't HTML (e.g. text/plain,
+// application/json). This is a *permanent* condition — the URL will never
+// become HTML — so retrying is pointless. The worker treats it as a clean skip
+// rather than a failure, so these never consume retries or land in the DLQ.
+export class UnsupportedContentTypeError extends Error {
+  readonly contentType: string | null;
+
+  constructor(url: string, contentType: string | null) {
+    super(`unsupported content-type "${contentType}" for ${url}`);
+    this.name = 'UnsupportedContentTypeError';
+    this.contentType = contentType;
+  }
+}
+
 /**
  * Parses a Retry-After header value into milliseconds. The header is either
  * a delta in whole seconds ("120") or an HTTP-date ("Wed, 21 Oct 2026 07:28:00

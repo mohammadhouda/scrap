@@ -54,6 +54,31 @@ describe('filterLinks', () => {
     expect(result).toEqual(['https://example.com/docs/intro']);
   });
 
+  it('drops non-HTML resources by file extension (e.g. contributors.txt, assets)', () => {
+    const result = filterLinks(
+      [
+        'https://example.com/docs/guide', // kept
+        'https://example.com/docs/guide/contributors.txt', // MDN-style, dropped
+        'https://example.com/docs/spec.pdf',
+        'https://example.com/docs/diagram.png',
+        'https://example.com/docs/bundle.js',
+        'https://example.com/docs/data.json',
+      ],
+      rules,
+    );
+    expect(result).toEqual(['https://example.com/docs/guide']);
+  });
+
+  it('ignores query strings when checking the extension', () => {
+    // The extension test is against the pathname, so a real page with a
+    // ?query isn't mistaken for an asset, and an asset with a ?query is caught.
+    const result = filterLinks(
+      ['https://example.com/docs/page?ref=x.txt', 'https://example.com/docs/app.js?v=2'],
+      rules,
+    );
+    expect(result).toEqual(['https://example.com/docs/page?ref=x.txt']);
+  });
+
   it('deduplicates repeated links within a batch', () => {
     const result = filterLinks(
       ['https://example.com/docs/a', 'https://example.com/docs/a'],

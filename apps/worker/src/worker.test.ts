@@ -151,6 +151,26 @@ describe('processScrapeJob', () => {
     expect(persistVersion).not.toHaveBeenCalled();
   });
 
+  it('skips (not fails) a non-HTML response so it never retries into the DLQ', async () => {
+    const { UnsupportedContentTypeError } = await import('@scraper/scraper');
+    cheerioFetch.mockRejectedValue(
+      new UnsupportedContentTypeError('https://example.com/contributors.txt', 'text/plain'),
+    );
+    const queues = fakeQueues();
+
+    const result = await processScrapeJob(connection, queues, {
+      sourceId: source.id,
+      url: 'https://example.com/contributors.txt',
+      depth: 0,
+    });
+
+    // Returns a clean skip instead of throwing — so BullMQ completes the job
+    // (no retry, no DLQ), and the crawl-run counter still settles.
+    expect(result).toEqual({ skipped: 'content-type' });
+    expect(applyDomainCooldown).not.toHaveBeenCalled();
+    expect(persistVersion).not.toHaveBeenCalled();
+  });
+
   it('does not open a cooldown for a plain fetch failure', async () => {
     cheerioFetch.mockRejectedValue(new Error('fetch failed: 500'));
     const queues = fakeQueues();

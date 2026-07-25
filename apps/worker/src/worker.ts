@@ -14,6 +14,7 @@ import {
   playwrightFetch,
   RateLimitedError,
   settleScrapeForRun,
+  UnsupportedContentTypeError,
 } from '@scraper/scraper';
 import { WORKER_CONCURRENCY } from './config.js';
 import type { Queues } from './queues.js';
@@ -26,7 +27,7 @@ export interface ScrapeJobData {
 }
 
 export type ScrapeJobResult =
-  | { skipped: 'robots' | 'cancelled' }
+  | { skipped: 'robots' | 'cancelled' | 'content-type' }
   | { defer: number }
   | { unchanged: true }
   | { versioned: number };
@@ -68,6 +69,14 @@ export async function processScrapeJob(
   try {
     result = source.renderJs ? await playwrightFetch(url) : await cheerioFetch(url);
   } catch (err) {
+    // A non-HTML response (text/plain, JSON, a stray .txt link, ...) is a
+    // *permanent* condition — retrying can't turn it into a page. Settle it as
+    // a clean skip so it never burns retries or pollutes the DLQ. (The link
+    // filter drops most of these before they're ever enqueued; this catches
+    // the rest, e.g. a clean URL that serves a non-HTML content-type.)
+    if (err instanceof UnsupportedContentTypeError) {
+      return { skipped: 'content-type' };
+    }
     // The origin pushed back (429/503): open a shared cooldown for the whole
     // domain — checkRateLimit surfaces it to every worker, so the fleet backs
     // off, and this job's own retries defer against it too. Rethrowing keeps
