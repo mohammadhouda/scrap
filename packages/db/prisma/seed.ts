@@ -5,25 +5,6 @@ const prisma = new PrismaClient();
 
 const sources = [
   {
-    name: 'quotes-static',
-    seedUrl: 'http://quotes.toscrape.com/',
-    allowPatterns: ['^http://quotes\\.toscrape\\.com/'],
-    denyPatterns: [] as string[],
-    renderJs: false,
-    maxDepth: 15,
-    ratePerSecond: 2,
-  },
-  {
-    name: 'quotes-js',
-    seedUrl: 'http://quotes.toscrape.com/js/',
-    allowPatterns: ['^http://quotes\\.toscrape\\.com/js'],
-    denyPatterns: [] as string[],
-    renderJs: true,
-    maxDepth: 15,
-    ratePerSecond: 1,
-  },
-  {
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript
     name: 'mdn-js',
     seedUrl: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
     allowPatterns: ['^https://developer\\.mozilla\\.org/en-US/docs/Web/JavaScript'],
