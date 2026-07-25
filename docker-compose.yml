@@ -54,6 +54,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       API_PORT: 4000
       ADMIN_TOKEN: ${ADMIN_TOKEN:-change-me}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
     ports:
       - "${API_PORT:-4000}:4000"
     depends_on:

@@ -50,6 +50,7 @@ function fakeQueues() {
   const makeQueue = () => ({
     add: vi.fn(),
     getJobCounts: vi.fn().mockResolvedValue({ wait: 0, active: 0, completed: 0, failed: 0, delayed: 0 }),
+    getWorkers: vi.fn().mockResolvedValue([]),
     getFailed: vi.fn().mockResolvedValue([]),
     getJob: vi.fn().mockResolvedValue(undefined),
   });

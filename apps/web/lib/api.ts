@@ -86,6 +86,10 @@ export interface QueueCount {
     failed: number;
     delayed: number;
   };
+  /** Live count of worker processes consuming this queue (= running containers). */
+  workers: number;
+  /** Per-worker concurrency; workers × concurrency = total in-flight slots. */
+  concurrency: number;
 }
 
 export interface DlqJob {
