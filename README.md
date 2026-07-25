@@ -133,6 +133,11 @@ demo sources before `api`/`worker` start, so this works from a fresh clone
 with no manual DB step. Seeding only happens on an **empty** database —
 restarting the stack never wipes crawled data.
 
+This starts **4 worker replicas by default** (the whole point is a distributed
+fleet — they share nothing but Redis + Postgres). The admin dashboard shows the
+live worker count. Dial it to any number without editing files:
+`docker compose up -d --scale worker=1` (e.g. on a memory-constrained machine).
+
 Same ports as above (`localhost:4000`, `localhost:3000`); Postgres/Redis
 are not exposed to any extra tooling beyond what's in `docker-compose.yml`.
 

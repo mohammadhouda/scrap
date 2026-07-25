@@ -69,6 +69,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.worker
+    deploy:
+      replicas: 4
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/scraper
       REDIS_URL: redis://redis:6379
