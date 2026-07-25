@@ -15,7 +15,7 @@ export default async function AdminSourcesPage() {
     try {
       initialRuns = await getLatestCrawls();
     } catch {
-      // best-effort — an empty seed just shows "never crawled" until the first poll
+      // best-effort an empty seed just shows "never crawled" until the first poll
     }
   } catch {
     error = 'Could not load sources.';

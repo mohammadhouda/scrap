@@ -55,7 +55,7 @@ export async function playwrightFetch(url: string): Promise<FetchResult> {
     }
 
     await page.waitForLoadState('networkidle', { timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => {
-      // Never idle within the budget — proceed with whatever has rendered.
+      // Never idle within the budget proceed with whatever has rendered.
     });
 
     const html = await page.content();

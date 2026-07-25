@@ -24,7 +24,7 @@ export function decodeHtml(bytes: Uint8Array, contentType: string | null): strin
   try {
     return new TextDecoder(charset).decode(bytes);
   } catch {
-    // Unknown/unsupported label — decode as UTF-8 rather than dropping the page.
+    // Unknown/unsupported label decode as UTF-8 rather than dropping the page.
     return new TextDecoder().decode(bytes);
   }
 }

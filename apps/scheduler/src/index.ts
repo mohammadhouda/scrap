@@ -22,7 +22,7 @@ async function sweep(): Promise<void> {
 }
 
 console.log(
-  `scheduler up — reconciling stale crawl runs every ${RECONCILE_INTERVAL_MS}ms (stale after ${STALE_AFTER_MS}ms)`,
+  `scheduler up reconciling stale crawl runs every ${RECONCILE_INTERVAL_MS}ms (stale after ${STALE_AFTER_MS}ms)`,
 );
 
 // Run once on boot, then on the interval. unref() so the timer doesn't hold the

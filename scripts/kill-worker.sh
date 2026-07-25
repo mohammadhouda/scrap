@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Chaos test: SIGKILL one worker container mid-crawl (no graceful drain, no
-# SIGTERM handler — the process just dies) and leave the rest running.
+# SIGTERM handler the process just dies) and leave the rest running.
 #
 # Expected behaviour afterwards:
 #   - the remaining workers keep consuming jobs without interruption;
 #   - the killed worker's in-flight jobs are detected as stalled by BullMQ
 #     (lock expiry, ~30s) and re-queued to a surviving worker;
 #   - the crawl run still finishes with pagesDone + pagesFailed == pagesQueued
-#     (verify in the admin UI or the CrawlRun row — that equality is the
+#     (verify in the admin UI or the CrawlRun row that equality is the
 #     "no lost jobs" check);
 #   - worst case (worker died exactly between settling a page and decrementing
 #     the outstanding counter) the scheduler's stale-run reconciler finalizes
@@ -23,13 +23,13 @@ count="${1:-1}"
 
 mapfile -t workers < <(docker compose ps -q worker)
 if [ "${#workers[@]}" -eq 0 ]; then
-  echo "no running worker containers — start the stack first:" >&2
+  echo "no running worker containers start the stack first:" >&2
   echo "  docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d" >&2
   exit 1
 fi
 
 if [ "$count" -ge "${#workers[@]}" ]; then
-  echo "refusing to kill $count of ${#workers[@]} workers — at least one must survive" >&2
+  echo "refusing to kill $count of ${#workers[@]} workers at least one must survive" >&2
   exit 1
 fi
 

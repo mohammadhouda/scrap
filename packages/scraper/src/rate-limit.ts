@@ -40,7 +40,7 @@ return waitMs
  *
  * This deliberately does NOT block. The old blocking version slept inside the
  * BullMQ job handler, holding the worker's concurrency slot (and the job lock)
- * while idle — so a domain rate-limited to 1 req/s would park every worker
+ * while idle so a domain rate-limited to 1 req/s would park every worker
  * slot in `sleep()` and starve jobs for *other* domains. The caller now defers
  * the job back to the queue (`job.moveToDelayed`) instead, freeing the slot.
  */

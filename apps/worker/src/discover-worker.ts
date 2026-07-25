@@ -13,7 +13,7 @@ export interface DiscoverJobData {
 }
 // Enqueues a scrape job per discovered URL. For a tracked crawl run each URL is
 // reserved first (reserveUrlForRun) so the run's queued/outstanding counters
-// stay exact and per-run deduped — only genuinely-new URLs get a scrape job.
+// stay exact and per-run deduped only genuinely-new URLs get a scrape job.
 // Untracked (manual) enqueues fall back to BullMQ's global jobId dedup.
 export async function processDiscoverJob(queues: Queues, redis: Redis, data: DiscoverJobData) {
   const { sourceId, urls, parentDepth, crawlRunId } = data;

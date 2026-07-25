@@ -49,7 +49,7 @@ export function sourcesRoutes(queues: Queues, redis?: Redis): FastifyPluginAsync
       async () => prisma.source.findMany({ orderBy: { createdAt: 'desc' } }),
     );
 
-    // Latest crawl run per source, in one query — backs the admin table's live
+    // Latest crawl run per source, in one query backs the admin table's live
     // polling so it doesn't need an N+1 request per source.
     app.get(
       '/crawls/latest',

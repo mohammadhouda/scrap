@@ -54,7 +54,7 @@ export async function reserveUrlForRun(
 
   if (added === 0) {
     // Already counted on a prior attempt. Enqueue only if its scrape job was
-    // never confirmed — i.e. a crash happened between reserve and enqueue.
+    // never confirmed i.e. a crash happened between reserve and enqueue.
     const confirmed = await redis.sismember(enqueuedKey(crawlRunId), hash);
     return confirmed === 0;
   }

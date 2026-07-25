@@ -1,5 +1,5 @@
 -- CrawlRun heartbeat column. Maintained by a DB trigger (below) rather than
--- Prisma's @updatedAt, so it stays correct for every update path — including
+-- Prisma's @updatedAt, so it stays correct for every update path including
 -- raw SQL and clients generated before this column existed. The DB default
 -- backfills existing rows and covers inserts.
 ALTER TABLE "CrawlRun" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

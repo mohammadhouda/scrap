@@ -5,10 +5,10 @@ import type { FetchResult } from './fetch-result.js';
 import { USER_AGENT } from './robots.js';
 
 const FETCH_TIMEOUT_MS = 15_000;
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB — pages larger than this aren't worth indexing and risk OOM.
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB pages larger than this aren't worth indexing and risk OOM.
 
 function isHtml(contentType: string | null): boolean {
-  if (!contentType) return true; // no header — optimistically attempt, cheerio handles junk gracefully
+  if (!contentType) return true; // no header optimistically attempt, cheerio handles junk gracefully
   const mediaType = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
   return mediaType === 'text/html' || mediaType === 'application/xhtml+xml' || mediaType === '';
 }
@@ -56,7 +56,7 @@ export async function cheerioFetch(url: string): Promise<FetchResult> {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   // 429 (and 503, which overloaded origins use the same way) is an explicit
-  // "back off" — surface it as a typed error so the worker can open a shared
+  // "back off" surface it as a typed error so the worker can open a shared
   // per-domain cooldown honoring Retry-After, instead of retrying blind.
   if (response.status === 429 || response.status === 503) {
     throw new RateLimitedError(url, response.status, parseRetryAfterMs(response.headers.get('retry-after')));

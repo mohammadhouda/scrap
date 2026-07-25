@@ -29,7 +29,7 @@ flowchart LR
 
     subgraph Storage
         PG[(Postgres 16 + pgvector)]
-        Redis[(Redis 7 — BullMQ queues)]
+        Redis[(Redis 7 BullMQ queues)]
     end
 
     OpenAI[[OpenAI API<br/>embeddings + gpt-5.5]]
@@ -52,7 +52,7 @@ flowchart LR
     IndexW -->|upsert Chunk + vector| PG
 ```
 
-Workers are horizontally scalable and stateless — any number of `worker`
+Workers are horizontally scalable and stateless any number of `worker`
 container replicas can consume the same three queues (`scrape`, `discover`,
 `index`) concurrently; BullMQ guarantees at-most-one-active-consumer per job.
 
@@ -61,16 +61,16 @@ container replicas can consume the same three queues (`scrape`, `discover`,
 ## Why queue-coordinated, not framework-coordinated
 
 Crawl frameworks like Crawlee ship their own in-process request queue,
-which is not shared across containers — using it for coordination would
+which is not shared across containers using it for coordination would
 make horizontal scaling impossible. Here the fetch layer is deliberately
 thin and all coordination lives in Redis:
 
 - BullMQ (`scrape`, `discover`, `index` queues on Redis) owns all
   cross-worker coordination, retries, backoff, and the dead-letter queue.
-- Each `scrape` job fetches exactly one URL — `fetch` + cheerio for static
+- Each `scrape` job fetches exactly one URL `fetch` + cheerio for static
   pages, or a **shared headless Chromium** (one browser per worker process,
-  one fresh context per fetch — `packages/scraper/src/playwright-fetch.ts`)
-  for JS-rendered ones, picked per `Source.renderJs` — then hands newly
+  one fresh context per fetch `packages/scraper/src/playwright-fetch.ts`)
+  for JS-rendered ones, picked per `Source.renderJs` then hands newly
   discovered links back to BullMQ as a `discover` job.
 
 ## URL lifecycle (scrape → discover → index)
@@ -115,7 +115,7 @@ Key invariants:
 - **Never overwrite history.** A changed page gets a new `PageVersion` row
   (`version` incremented); nothing is updated in place.
 - **Content dedup, not just URL dedup.** `contentHash = sha256(cleanedMd)`
-  is compared against the page's latest version before writing — an
+  is compared against the page's latest version before writing an
   unchanged re-crawl only bumps `lastSeenAt`.
 - **Discover-job dedup.** `discover` jobs use `jobId = sha256(url)` so
   concurrently-discovered duplicate links collapse into one `scrape` job
@@ -144,13 +144,13 @@ cleanedMarkdown
   → tables become their own chunks (ChunkType.TABLE), prefixed with a
     caption line, bypassing the text splitter
   → OpenAI text-embedding-3-small, batched
-  → upsert into Chunk (raw SQL — pgvector's `vector(1536)` column isn't a
+  → upsert into Chunk (raw SQL pgvector's `vector(1536)` column isn't a
     native Prisma type) with a generated tsvector column for keyword search
 ```
 
 Re-indexing on a new `PageVersion` deletes the previous version's chunks
 first (`clearChunksForVersions`) so only the latest version is ever
-searchable — old versions stay in Postgres for the diff viewer but drop out
+searchable old versions stay in Postgres for the diff viewer but drop out
 of search/RAG.
 
 **Important operational note:** because `embedding` and the generated
@@ -165,16 +165,16 @@ checked-in migrations; never `migrate dev` outside initial schema design.
 Three search modes, all reachable via `GET /search?mode=` and used
 internally by `/ask`:
 
-- **`keyword`** — Postgres full-text search against the generated
+- **`keyword`** Postgres full-text search against the generated
   `tsvector` column (GIN-indexed).
-- **`semantic`** — pgvector cosine similarity (`vector_cosine_ops`,
+- **`semantic`** pgvector cosine similarity (`vector_cosine_ops`,
   HNSW-indexed) against the embedded query.
-- **`hybrid`** (default) — Reciprocal Rank Fusion of both result lists,
+- **`hybrid`** (default) Reciprocal Rank Fusion of both result lists,
   `score = Σ 1/(60 + rank)` per the standard RRF constant, since cosine
   distance and `ts_rank` aren't on comparable scales.
 
 `/ask` (`packages/rag/ask.ts`) runs the selected search mode, builds a
-single shared prompt (`packages/rag/prompt.ts` — no ad-hoc prompts
+single shared prompt (`packages/rag/prompt.ts` no ad-hoc prompts
 elsewhere in the codebase), and streams the GPT-5.5 completion back
 token-by-token over Server-Sent Events. The model is instructed to answer
 **only** from the numbered sources and cite every claim with `[n]`;
@@ -182,19 +182,19 @@ citations returned to the client (`{n, url, title, chunkId, pageId}`) are
 built directly from the retrieved-chunk list the prompt was constructed
 from, so a citation can never point outside the actual retrieval set.
 
-## API (apps/api — Fastify)
+## API (apps/api Fastify)
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/health` | — | Liveness |
-| GET | `/sources` | — | List configured sources |
+| GET | `/health` | | Liveness |
+| GET | `/sources` | | List configured sources |
 | POST | `/sources` | admin | Register a new source |
 | POST | `/sources/:id/crawl` | admin | Enqueue a `scrape` job for the source's seed URL |
-| GET | `/pages` | — | Paginated raw pages, optional `?source=` filter |
-| GET | `/pages/:id` | — | Single page + source name |
-| GET | `/pages/:id/versions` | — | Full version history with chunks |
-| GET | `/search?q=&mode=&source=` | — | Keyword / semantic / hybrid search |
-| POST | `/ask` | — | RAG Q&A, streams SSE (`citations` → `token`* → `done`/`error`) |
+| GET | `/pages` | | Paginated raw pages, optional `?source=` filter |
+| GET | `/pages/:id` | | Single page + source name |
+| GET | `/pages/:id/versions` | | Full version history with chunks |
+| GET | `/search?q=&mode=&source=` | | Keyword / semantic / hybrid search |
+| POST | `/ask` | | RAG Q&A, streams SSE (`citations` → `token`* → `done`/`error`) |
 | GET | `/admin/queues` | admin | Per-queue job counts |
 | GET | `/admin/dlq?queue=` | admin | Failed jobs for one queue |
 | POST | `/admin/dlq/:id/retry?queue=` | admin | Re-enqueue a failed job |
@@ -206,14 +206,14 @@ Admin routes check a static bearer token (`ADMIN_TOKEN`) via a
 
 `/ask`'s SSE response is written by hand
 (`reply.hijack()` + `reply.raw.write`) rather than a plugin, because
-Fastify's SSE story requires bypassing `onSend` hooks — including the CORS
+Fastify's SSE story requires bypassing `onSend` hooks including the CORS
 plugin, so `Access-Control-Allow-Origin` is set manually before the stream
 starts.
 
-## UI (apps/web — Next.js 15 App Router)
+## UI (apps/web Next.js 15 App Router)
 
 **Public**, no auth: `/` (search bar + source cards), `/search`
-(keyword/semantic/hybrid toggle, source filter, all server-rendered — no
+(keyword/semantic/hybrid toggle, source filter, all server-rendered no
 client JS needed for filtering, it's plain `<Link>`s with query params),
 `/ask` (client component; consumes `/ask`'s SSE stream via `fetch()` +
 manual parsing rather than `EventSource`, since `EventSource` can't send a
@@ -226,7 +226,7 @@ for a cited chunk).
 `/admin/pages/[id]/diffs` (word-level version diff). Because the cookie is
 httpOnly, client-side data needs (live-polling counters) go through a
 same-origin Route Handler proxy (`/admin/queues-data`) that reads the
-cookie server-side and calls the real API — the token itself never reaches
+cookie server-side and calls the real API the token itself never reaches
 client JS. Mutations (create source, start crawl, retry job, login/logout)
 are Server Actions for the same reason.
 
@@ -237,17 +237,17 @@ Summary: `Source` (1) → `Page` (N, unique by URL) → `PageVersion` (N,
 `@@unique([pageId, version])`, full raw HTML + cleaned markdown + extracted
 tables kept per version) → `Chunk` (N, cascades on version delete; carries
 the `pgvector` embedding and generated `tsvector` added by raw-SQL
-migration, plus `ChunkType` — `PROSE | TABLE | CODE | LIST`).
+migration, plus `ChunkType` `PROSE | TABLE | CODE | LIST`).
 
 ## Fault tolerance
 
-- Every worker container is stateless and independently killable — BullMQ
+- Every worker container is stateless and independently killable BullMQ
   redelivers a job whose consumer dies mid-processing to another worker
   once its lock expires.
 - All external I/O (OpenAI, Redis, Postgres) that can transiently fail is
   wrapped in the queue's own retry/backoff, not ad-hoc `try/catch` per call
   site.
 - Jobs that exhaust retries surface in `/admin/dlq` rather than disappearing
-  — nothing fails silently.
+  nothing fails silently.
 - See `docs/benchmarks.md` (populated in Phase 7) for the horizontal-scaling
   and worker-kill chaos test results.

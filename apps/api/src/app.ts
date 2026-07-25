@@ -22,7 +22,7 @@ export interface AppDeps {
   queues: Queues;
   embedTexts: Embedder;
   ask: Asker;
-  /** Optional — enables the per-IP rate limiter on cost-bearing routes when present. */
+  /** Optional enables the per-IP rate limiter on cost-bearing routes when present. */
   redis?: Redis;
 }
 
@@ -52,7 +52,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // Restrict CORS to an explicit allowlist in production (CORS_ORIGIN, comma-
   // separated). With none set, fall back to reflecting the request origin so
-  // local dev keeps working — but a deployed instance should always pin this.
+  // local dev keeps working but a deployed instance should always pin this.
   const allowlist = (process.env.CORS_ORIGIN ?? '')
     .split(',')
     .map((o) => o.trim())

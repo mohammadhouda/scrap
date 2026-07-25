@@ -44,7 +44,7 @@ export async function storeChunks(
     });
 
     // Key by chunk.index (unique within a page version) rather than array
-    // position — createManyAndReturn does not guarantee it preserves order.
+    // position createManyAndReturn does not guarantee it preserves order.
     const embeddingByIndex = new Map(chunks.map((chunk, i) => [chunk.index, embeddings[i]]));
 
     const rows = created.map((row) => {
@@ -56,7 +56,7 @@ export async function storeChunks(
     });
 
     // embedding is a raw-SQL pgvector column, so it can't go through the Prisma
-    // create above — set every row's vector in one UPDATE ... FROM (VALUES ...).
+    // create above set every row's vector in one UPDATE ... FROM (VALUES ...).
     await tx.$executeRaw`
       UPDATE "Chunk" AS c
       SET embedding = v.embedding

@@ -49,7 +49,7 @@ export function createEmbedder(options: EmbedderOptions = {}): Embedder {
     // createOpenAIFetch: uses Node's native fetch (avoids the SDK default
     // node-fetch@2's `ERR_STREAM_PREMATURE_CLOSE` under TLS-inspecting
     // proxies) *and* strips the content-length header that a jsdom-installed
-    // global undici dispatcher rejects — see openai-fetch.ts.
+    // global undici dispatcher rejects see openai-fetch.ts.
     client ??= new OpenAI({
       apiKey: options.apiKey ?? process.env.OPENAI_API_KEY,
       fetch: createOpenAIFetch(),

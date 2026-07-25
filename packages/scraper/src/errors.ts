@@ -15,8 +15,8 @@ export class RateLimitedError extends Error {
 }
 
 // Thrown by the fetch layer when the response isn't HTML (e.g. text/plain,
-// application/json). This is a *permanent* condition — the URL will never
-// become HTML — so retrying is pointless. The worker treats it as a clean skip
+// application/json). This is a *permanent* condition the URL will never
+// become HTML so retrying is pointless. The worker treats it as a clean skip
 // rather than a failure, so these never consume retries or land in the DLQ.
 export class UnsupportedContentTypeError extends Error {
   readonly contentType: string | null;
@@ -32,7 +32,7 @@ export class UnsupportedContentTypeError extends Error {
  * Parses a Retry-After header value into milliseconds. The header is either
  * a delta in whole seconds ("120") or an HTTP-date ("Wed, 21 Oct 2026 07:28:00
  * GMT"). Returns undefined for a missing/unparseable value or a date in the
- * past — callers fall back to their own default cooldown.
+ * past callers fall back to their own default cooldown.
  */
 export function parseRetryAfterMs(header: string | null, now = Date.now()): number | undefined {
   if (!header) return undefined;

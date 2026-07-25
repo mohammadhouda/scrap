@@ -164,7 +164,7 @@ describe('processScrapeJob', () => {
       depth: 0,
     });
 
-    // Returns a clean skip instead of throwing — so BullMQ completes the job
+    // Returns a clean skip instead of throwing so BullMQ completes the job
     // (no retry, no DLQ), and the crawl-run counter still settles.
     expect(result).toEqual({ skipped: 'content-type' });
     expect(applyDomainCooldown).not.toHaveBeenCalled();

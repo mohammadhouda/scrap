@@ -41,7 +41,7 @@ interface HeadingSection {
 // Hand-rolled instead of a library MarkdownHeaderTextSplitter (JS LangChain
 // doesn't ship an equivalent that retains heading metadata per section).
 // Fenced code blocks are tracked so a `# comment` line inside a ``` / ~~~ fence
-// isn't mistaken for a Markdown heading — critical for code-heavy pages (MDN),
+// isn't mistaken for a Markdown heading critical for code-heavy pages (MDN),
 // where that bug would split mid-code-sample and mislabel headings.
 function splitByHeadings(markdown: string): HeadingSection[] {
   const lines = markdown.split('\n');

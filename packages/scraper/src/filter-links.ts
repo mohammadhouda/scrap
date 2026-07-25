@@ -6,7 +6,7 @@ export interface LinkFilterRules {
 
 // Obvious non-HTML resources by file extension. These get discovered as plain
 // <a href> links (e.g. MDN pages link to a `contributors.txt` per page), but
-// they're not crawlable pages — fetching them just trips the content-type
+// they're not crawlable pages fetching them just trips the content-type
 // guard and, before this filter, burned all 5 retries into the DLQ. Matched
 // against the pathname only, so query strings don't interfere.
 const NON_HTML_EXT =

@@ -79,7 +79,7 @@ export default function AskPage() {
             Grounded in your crawled sources
           </span>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">Ask a question</h1>
-          <p className="text-zinc-400">Every claim in the answer is cited — click a number to verify it.</p>
+          <p className="text-zinc-400">Every claim in the answer is cited click a number to verify it.</p>
         </div>
       ) : null}
 
@@ -156,7 +156,7 @@ export default function AskPage() {
 // While streaming (citedIndices === null) every retrieved source is listed.
 // Once the answer is complete, the sources the model actually cited stay at
 // full strength and the rest collapse under a quieter "also retrieved"
-// section — retrieved-but-uncited context is still inspectable, but no longer
+// section retrieved-but-uncited context is still inspectable, but no longer
 // masquerades as evidence for the answer.
 function SourceList({
   citations,

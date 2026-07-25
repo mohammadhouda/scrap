@@ -1,4 +1,4 @@
-# Distributed RAG-Based Web Scraper — Build Plan
+# Distributed RAG-Based Web Scraper Build Plan
 
 > **For:** Claude Code
 > **Owner:** Mo
@@ -194,7 +194,7 @@ ADMIN_TOKEN=change-me
 
 Each phase must end in a commit that passes CI. Do not proceed until acceptance criteria are met.
 
-### Phase 0 — Foundation
+### Phase 0 Foundation
 
 - [ ] Initialize pnpm workspaces, Turborepo, TS project references
 - [ ] Set up ESLint + Prettier + Vitest
@@ -208,14 +208,14 @@ Each phase must end in a commit that passes CI. Do not proceed until acceptance 
 
 **Acceptance:** `docker compose up` starts all services; `pnpm test` passes on a smoke test.
 
-### Phase 1 — Scraping
+### Phase 1 Scraping
 
-The key integration decision: **BullMQ owns the distributed queue; Crawlee is used per-worker as the fetcher/parser.** Do not use Crawlee's internal `RequestQueue` for coordination — that breaks the distributed story.
+The key integration decision: **BullMQ owns the distributed queue; Crawlee is used per-worker as the fetcher/parser.** Do not use Crawlee's internal `RequestQueue` for coordination that breaks the distributed story.
 
 **Queues:**
-- `scrape` — one job = one URL to fetch
-- `index` — one job = one PageVersion to embed
-- `discover` — one job = a batch of newly discovered URLs to enqueue after allow/deny filtering
+- `scrape` one job = one URL to fetch
+- `index` one job = one PageVersion to embed
+- `discover` one job = a batch of newly discovered URLs to enqueue after allow/deny filtering
 
 **Worker shape (`apps/worker`):**
 
@@ -230,7 +230,7 @@ const scrapeWorker = new Worker('scrape', async (job) => {
 
   // rate limit gate (BullMQ rate limiter, keyed by domain)
 
-  // fetch via Crawlee — pick crawler based on source.renderJs
+  // fetch via Crawlee pick crawler based on source.renderJs
   const result = source.renderJs
     ? await playwrightFetch(url)
     : await cheerioFetch(url);
@@ -265,28 +265,28 @@ const scrapeWorker = new Worker('scrape', async (job) => {
 ```
 
 **Tasks:**
-- [ ] `packages/scraper/robots.ts` — cached robots.txt parser with per-domain TTL
-- [ ] `packages/scraper/rate-limit.ts` — token bucket keyed by domain, Redis-backed
-- [ ] `packages/scraper/cheerio-fetch.ts` — undici + cheerio, returns `{ html, discoveredLinks, meta }`
-- [ ] `packages/scraper/playwright-fetch.ts` — Crawlee's PlaywrightCrawler in single-request mode
-- [ ] `packages/scraper/dedup.ts` — sha256 helpers for URL and content
-- [ ] `packages/scraper/versioning.ts` — persist logic that bumps version number
+- [ ] `packages/scraper/robots.ts` cached robots.txt parser with per-domain TTL
+- [ ] `packages/scraper/rate-limit.ts` token bucket keyed by domain, Redis-backed
+- [ ] `packages/scraper/cheerio-fetch.ts` undici + cheerio, returns `{ html, discoveredLinks, meta }`
+- [ ] `packages/scraper/playwright-fetch.ts` Crawlee's PlaywrightCrawler in single-request mode
+- [ ] `packages/scraper/dedup.ts` sha256 helpers for URL and content
+- [ ] `packages/scraper/versioning.ts` persist logic that bumps version number
 - [ ] Retry policy on jobs: 5 attempts, exponential backoff (2s → 32s)
 - [ ] DLQ: BullMQ auto-marks failed jobs after max attempts; expose them via admin API
 - [ ] Seed script: register the 3 target sources (see section 12)
 
 **Acceptance:** Run against Site 1, see PageVersions accumulate with version=1. Re-run, see either unchanged skips or version=2 rows.
 
-### Phase 2 — Processing
+### Phase 2 Processing
 
-- [ ] `packages/processor/clean.ts` — `rawHtml → readability → turndown → cleanedMarkdown`
-- [ ] `packages/processor/tables.ts` — extract HTML tables with Cheerio, convert to array-of-objects JSON, store in `PageVersion.tables`
-- [ ] `packages/processor/language.ts` — detect language (franc or similar), store on PageVersion
+- [ ] `packages/processor/clean.ts` `rawHtml → readability → turndown → cleanedMarkdown`
+- [ ] `packages/processor/tables.ts` extract HTML tables with Cheerio, convert to array-of-objects JSON, store in `PageVersion.tables`
+- [ ] `packages/processor/language.ts` detect language (franc or similar), store on PageVersion
 - [ ] Zod schemas in `packages/shared/schemas` validating processed output before DB write
 
 **Acceptance:** Every stored PageVersion has non-empty `cleanedMd`, correct title, and tables extracted where present.
 
-### Phase 3 — Indexing (RAG index side)
+### Phase 3 Indexing (RAG index side)
 
 **Chunking pipeline** in `packages/rag/chunk.ts`:
 
@@ -298,19 +298,19 @@ cleanedMarkdown
   → tables passed through as their own chunks with a synthesized caption line prepended
 ```
 
-- [ ] `packages/rag/chunk.ts` — the pipeline above
-- [ ] `packages/rag/embed.ts` — batched OpenAI embeddings (batch size 100, retry on 429)
-- [ ] `apps/worker/index-worker.ts` — consumes `index` queue: chunk → embed → upsert to `Chunk` with pgvector
+- [ ] `packages/rag/chunk.ts` the pipeline above
+- [ ] `packages/rag/embed.ts` batched OpenAI embeddings (batch size 100, retry on 429)
+- [ ] `apps/worker/index-worker.ts` consumes `index` queue: chunk → embed → upsert to `Chunk` with pgvector
 - [ ] On re-index (new PageVersion): delete old chunks for the previous version via cascade; index the new version
 
 **Acceptance:** Query `SELECT count(*) FROM "Chunk"` grows in proportion to PageVersions. HNSW index exists.
 
-### Phase 4 — Retrieval + RAG
+### Phase 4 Retrieval + RAG
 
-- [ ] `packages/rag/retrieve.ts` — semantic top-k with pgvector cosine similarity, optional source filter
-- [ ] `packages/rag/keyword.ts` — Postgres FTS ranking on the tsvector column
-- [ ] `packages/rag/hybrid.ts` — reciprocal rank fusion of semantic + keyword (mention in report)
-- [ ] `packages/rag/prompt.ts` — the citation-forcing prompt:
+- [ ] `packages/rag/retrieve.ts` semantic top-k with pgvector cosine similarity, optional source filter
+- [ ] `packages/rag/keyword.ts` Postgres FTS ranking on the tsvector column
+- [ ] `packages/rag/hybrid.ts` reciprocal rank fusion of semantic + keyword (mention in report)
+- [ ] `packages/rag/prompt.ts` the citation-forcing prompt:
 
 ```
 System: You answer questions using ONLY the provided sources. Cite every claim
@@ -326,12 +326,12 @@ Sources:
 [2] ...
 ```
 
-- [ ] `packages/rag/ask.ts` — orchestrator: retrieve → prompt → stream from GPT-5.5 → parse citations → return `{ answerStream, citations: [{ n, url, title, chunkId }] }`
+- [ ] `packages/rag/ask.ts` orchestrator: retrieve → prompt → stream from GPT-5.5 → parse citations → return `{ answerStream, citations: [{ n, url, title, chunkId }] }`
 - [ ] Multi-source synthesis test: seed a question whose answer requires chunks from 2+ sites; assert both appear in citations.
 
 **Acceptance:** `/ask` returns an answer with at least one `[n]` per non-trivial claim, and the cited URLs are real.
 
-### Phase 5 — API (Fastify)
+### Phase 5 API (Fastify)
 
 Routes:
 
@@ -357,19 +357,19 @@ Routes:
 
 **Acceptance:** All routes return sensible responses; SSE stream is clean; admin routes 401 without token.
 
-### Phase 6 — UI (Next.js)
+### Phase 6 UI (Next.js)
 
 Public routes:
-- `/` — landing with search bar, source cards showing page counts + last crawl time
-- `/search` — results list, keyword/semantic toggle, filters sidebar
-- `/ask` — question input, streaming answer with `[n]` citation chips, sources panel
-- `/page/[id]` — cached page snapshot with highlighted chunk
+- `/` landing with search bar, source cards showing page counts + last crawl time
+- `/search` results list, keyword/semantic toggle, filters sidebar
+- `/ask` question input, streaming answer with `[n]` citation chips, sources panel
+- `/page/[id]` cached page snapshot with highlighted chunk
 
 Admin routes (behind `ADMIN_TOKEN` cookie, simple gate):
-- `/admin` — dashboard, live queue counters (polling every 2s or WS)
-- `/admin/sources` — CRUD for sources, "Start crawl" button
-- `/admin/dlq` — failed jobs table, retry/discard actions
-- `/admin/pages/[id]/diffs` — version diff viewer (diff-match-patch or similar)
+- `/admin` dashboard, live queue counters (polling every 2s or WS)
+- `/admin/sources` CRUD for sources, "Start crawl" button
+- `/admin/dlq` failed jobs table, retry/discard actions
+- `/admin/pages/[id]/diffs` version diff viewer (diff-match-patch or similar)
 
 - [ ] Tailwind + shadcn/ui components (Button, Card, Input, Table, Tabs, Badge)
 - [ ] Use `EventSource` for `/ask` streaming
@@ -378,24 +378,24 @@ Admin routes (behind `ADMIN_TOKEN` cookie, simple gate):
 
 **Acceptance:** All flows described in section 3 of the user journey work end-to-end.
 
-### Phase 7 — Fault tolerance + horizontal scaling demo
+### Phase 7 Fault tolerance + horizontal scaling demo
 
 This exists specifically for the video and report.
 
-- [ ] `docker-compose.scale.yml` — `docker compose up --scale worker=4`
-- [ ] Benchmark script: `scripts/bench.ts` — enqueue N URLs against a controlled fixture site, measure wall-clock with 1 vs 2 vs 4 workers, output a CSV
-- [ ] Chaos script: `scripts/kill-worker.sh` — kills one worker container mid-crawl; verify in-flight jobs redistribute and DLQ stays empty for transient failures
+- [ ] `docker-compose.scale.yml` `docker compose up --scale worker=4`
+- [ ] Benchmark script: `scripts/bench.ts` enqueue N URLs against a controlled fixture site, measure wall-clock with 1 vs 2 vs 4 workers, output a CSV
+- [ ] Chaos script: `scripts/kill-worker.sh` kills one worker container mid-crawl; verify in-flight jobs redistribute and DLQ stays empty for transient failures
 - [ ] Document results in `docs/benchmarks.md`
 
 **Acceptance:** Benchmark shows near-linear speedup (>3x with 4 workers vs 1); chaos test shows zero lost jobs.
 
-### Phase 8 — Report, diagrams, video
+### Phase 8 Report, diagrams, video
 
-- [ ] `docs/architecture.md` — component diagram (Mermaid or Excalidraw export)
-- [ ] `docs/sequence-diagrams.md` — the URL-lifecycle and ask-flow sequences from section 3 of user journey
-- [ ] `docs/ethics.md` — for each of the 3 target sites: robots.txt status, ToS review, rate limit chosen, contact info if disallowed sections were skipped
-- [ ] `docs/tech-justifications.md` — every choice from section 2 with one considered alternative
-- [ ] `docs/chunking-strategy.md` — the table from section 5 of chunking discussion, expanded
+- [ ] `docs/architecture.md` component diagram (Mermaid or Excalidraw export)
+- [ ] `docs/sequence-diagrams.md` the URL-lifecycle and ask-flow sequences from section 3 of user journey
+- [ ] `docs/ethics.md` for each of the 3 target sites: robots.txt status, ToS review, rate limit chosen, contact info if disallowed sections were skipped
+- [ ] `docs/tech-justifications.md` every choice from section 2 with one considered alternative
+- [ ] `docs/chunking-strategy.md` the table from section 5 of chunking discussion, expanded
 - [ ] Video script outline in `docs/video-script.md`
 - [ ] Record 10–15 min video: intro → architecture → live scrape → search demo → ask demo → fault tolerance demo → scaling benchmark → wrap
 
@@ -462,9 +462,9 @@ Prompt the LLM to output `[n]` inline. Post-process the streamed answer to extra
 
 Pick three that you've verified against robots.txt. Suggested set:
 
-1. **Static** — `en.wikipedia.org` (specific category tree; respects a low rate limit)
-2. **JS-rendered** — a public SPA docs site (e.g., a Vercel/Next-powered docs portal) that renders content client-side
-3. **500+ pages** — `news.ycombinator.com` archive pages (pagination), or `arxiv.org` listing pages (be very polite: 1 req/3s)
+1. **Static** `en.wikipedia.org` (specific category tree; respects a low rate limit)
+2. **JS-rendered** a public SPA docs site (e.g., a Vercel/Next-powered docs portal) that renders content client-side
+3. **500+ pages** `news.ycombinator.com` archive pages (pagination), or `arxiv.org` listing pages (be very polite: 1 req/3s)
 
 Document ToS review and rate-limit rationale for each in `docs/ethics.md`.
 
@@ -473,7 +473,7 @@ Document ToS review and rate-limit rationale for each in `docs/ethics.md`.
 ## 9. Testing strategy
 
 - **Unit:** chunking, dedup, robots parsing, citation extraction, rate limiter
-- **Integration:** worker end-to-end against a local fixture HTTP server (spin one up in tests) — asserts DB rows, queue transitions
+- **Integration:** worker end-to-end against a local fixture HTTP server (spin one up in tests) asserts DB rows, queue transitions
 - **API:** Supertest against Fastify instance with a test DB
 - **E2E (light):** Playwright test that hits the Next.js UI, runs a search, gets results
 
@@ -501,9 +501,9 @@ CI runs all except E2E on every push. E2E on tags only.
 ## 11. Constraints and reminders
 
 - Every worker container must be independently killable without data loss.
-- Never overwrite a PageVersion silently — always bump version and keep history.
+- Never overwrite a PageVersion silently always bump version and keep history.
 - Never let a citation `[n]` point to a URL not in the retrieval set.
-- Every LLM prompt goes through a single `packages/rag/prompt.ts` — no ad-hoc prompts in route handlers.
+- Every LLM prompt goes through a single `packages/rag/prompt.ts` no ad-hoc prompts in route handlers.
 - All external I/O (LLM, embeddings, Redis, DB) wrapped in retry-with-backoff.
 - No secrets committed; `.env.example` only.
 - Commit granularly with meaningful messages. The grader may inspect commit history.
@@ -512,12 +512,12 @@ CI runs all except E2E on every push. E2E on tags only.
 
 ## 12. Suggested build order for Claude Code sessions
 
-1. Phase 0 in one session — leave with green CI and running Docker Compose.
-2. Phase 1 in two sessions — split at "single-URL fetch works" vs "distributed queue + retries + DLQ".
-3. Phase 2 + Phase 3 in one session — they're small and tightly coupled.
-4. Phase 4 in one session — get citations working end-to-end before UI.
+1. Phase 0 in one session leave with green CI and running Docker Compose.
+2. Phase 1 in two sessions split at "single-URL fetch works" vs "distributed queue + retries + DLQ".
+3. Phase 2 + Phase 3 in one session they're small and tightly coupled.
+4. Phase 4 in one session get citations working end-to-end before UI.
 5. Phase 5 in one session.
-6. Phase 6 in two sessions — public UI, then admin.
+6. Phase 6 in two sessions public UI, then admin.
 7. Phase 7 in one session.
 8. Phase 8 (docs + video) done manually, not by Claude Code.
 

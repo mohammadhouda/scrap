@@ -5,7 +5,7 @@
 # runs 4 worker replicas by default; `--scale worker=N` on the command line
 # overrides the replica count without editing this file. Workers coordinate
 # purely through Redis (BullMQ queues + per-run bookkeeping), so replicas can
-# be added or SIGKILLed at any time — see scripts/kill-worker.sh and
+# be added or SIGKILLed at any time see scripts/kill-worker.sh and
 # docs/benchmarks.md.
 services:
   worker:

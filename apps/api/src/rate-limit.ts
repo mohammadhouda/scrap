@@ -15,7 +15,7 @@ const noop: PreHandler = async () => {};
 
 /**
  * Fixed-window per-IP limiter for the cost-bearing routes (`/search`, `/ask`)
- * — both spend money on OpenAI per call, so an unthrottled client is a
+ * both spend money on OpenAI per call, so an unthrottled client is a
  * cost-amplification / DoS vector. Redis-backed so the limit holds across API
  * replicas. Returns a no-op when no Redis is provided (e.g. unit tests).
  */

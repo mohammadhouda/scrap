@@ -50,7 +50,7 @@ export async function persistVersion(input: PersistVersionInput): Promise<Persis
     try {
       return await prisma.$transaction(async (tx) => {
         // upsert both creates the Page on first sight and touches lastSeenAt
-        // on the unchanged path — no separate touchLastSeen round trip needed.
+        // on the unchanged path no separate touchLastSeen round trip needed.
         const page = await tx.page.upsert({
           where: { url: input.url },
           create: { url: input.url, urlHash, sourceId: input.sourceId },

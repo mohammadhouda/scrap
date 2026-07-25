@@ -43,7 +43,7 @@ describe('checkRateLimit', () => {
     // Drain the only token.
     await expect(checkRateLimit(redis, 'example.com', 10)).resolves.toBe(0);
 
-    // Next call has no token — should report a wait, not block.
+    // Next call has no token should report a wait, not block.
     const waitMs = await checkRateLimit(redis, 'example.com', 10);
     expect(waitMs).toBeGreaterThan(0);
   });

@@ -33,7 +33,7 @@ const {
 } = await import('./crawl-run.js');
 
 // Minimal in-memory Redis fake: SADD (set semantics), INCR/DECR counters,
-// string keys (set/exists/del), and no-op EXPIRE — enough to exercise the
+// string keys (set/exists/del), and no-op EXPIRE enough to exercise the
 // reserve/settle/cancel bookkeeping.
 function fakeRedis() {
   const sets = new Map<string, Set<string>>();

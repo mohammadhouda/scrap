@@ -35,7 +35,7 @@ export function SourcesTable({
         const runs = (await response.json()) as CrawlRun[];
         if (!cancelled) setRunsBySource(toMap(runs));
       } catch {
-        // transient failure — keep the last known values, try again next tick
+        // transient failure keep the last known values, try again next tick
       }
     }
 

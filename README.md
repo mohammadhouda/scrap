@@ -2,7 +2,7 @@
 
 A distributed, fault-tolerant web scraping framework with content
 versioning, pgvector-backed hybrid (keyword + semantic) search, and RAG
-question answering with source citations — built on independently
+question answering with source citations built on independently
 scalable BullMQ workers coordinated through Redis.
 
 See [`docs/architecture.md`](docs/architecture.md) for how it fits
@@ -11,7 +11,7 @@ API reference) and [`plan.md`](plan.md) for the original build plan.
 
 ## What it does
 
-1. Crawls multiple sites — static, JS-rendered, and a 500+ page catalog —
+1. Crawls multiple sites static, JS-rendered, and a 500+ page catalog —
    using any number of independent worker containers coordinated through
    shared BullMQ queues (never an in-process, unscalable crawl-framework
    queue). Politeness is enforced twice: proactively (per-domain token
@@ -32,7 +32,7 @@ API reference) and [`plan.md`](plan.md) for the original build plan.
 
 ```
 apps/
-  api/         Fastify API (search, ask, admin) — REST + SSE
+  api/         Fastify API (search, ask, admin) REST + SSE
   worker/      BullMQ workers: scrape, discover, index (horizontally scalable)
   web/         Next.js UI (public + admin, App Router)
   scheduler/   Cron-style crawl scheduler
@@ -51,16 +51,16 @@ docs/          architecture.md, benchmarks.md, ethics.md, etc. (report material)
 - Node.js 22.13+ (pnpm 11 requires it)
 - pnpm 11+ (`corepack enable` picks up the version pinned in `package.json`)
 - Docker + Docker Compose
-- An OpenAI API key (embeddings + GPT-5.5) — the app starts without one,
+- An OpenAI API key (embeddings + GPT-5.5) the app starts without one,
   but indexing and `/ask` will fail until it's set
 
 ## Running it locally
 
 There are two ways to run this. Pick one.
 
-### Option A — hybrid: Postgres/Redis in Docker, apps on the host (fastest inner loop)
+### Option A hybrid: Postgres/Redis in Docker, apps on the host (fastest inner loop)
 
-This is the recommended day-to-day setup — no Docker rebuild needed when
+This is the recommended day-to-day setup no Docker rebuild needed when
 you change code.
 
 ```bash
@@ -69,7 +69,7 @@ pnpm install
 
 docker compose up -d postgres redis
 
-# first time only — creates the schema. Never re-run this against a
+# first time only creates the schema. Never re-run this against a
 # populated DB; see the note below.
 pnpm --filter @scraper/db run prisma:migrate
 
@@ -81,7 +81,7 @@ pnpm dev                      # runs api + worker + web + scheduler via turbo
 ```
 
 > Always use the `run prisma:*` scripts (not `exec prisma ...`) for anything
-> under `packages/db` — the scripts load the root `.env` via `dotenv-cli`,
+> under `packages/db` the scripts load the root `.env` via `dotenv-cli`,
 > whereas `exec prisma db seed` / `exec prisma migrate` run Prisma directly and
 > fail with `Environment variable not found: DATABASE_URL`.
 
@@ -91,11 +91,11 @@ This gives you:
 
 ### Admin access
 
-The operator pages (`/admin` — dashboard, sources, dead-letter queue, version
+The operator pages (`/admin` dashboard, sources, dead-letter queue, version
 diffs) are gated by a token. To log in:
 
 1. Open `.env` and find `ADMIN_TOKEN` (it starts as the `change-me` placeholder
-   copied from `.env.example` — set it to any value you like).
+   copied from `.env.example` set it to any value you like).
 2. Go to **http://localhost:3000/admin**, and paste that exact `ADMIN_TOKEN`
    value into the login prompt.
 
@@ -106,18 +106,18 @@ it so the new value takes effect.
 > **Windows note:** `pnpm dev`'s `tsx watch` processes and the Prisma CLI
 > both need env vars loaded from the root `.env`; every relevant script
 > (`api`/`worker`/`scheduler`'s `dev`, and `packages/db`'s `prisma:*`
-> scripts) already runs through `dotenv-cli` for you — you don't need to
+> scripts) already runs through `dotenv-cli` for you you don't need to
 > export anything manually.
 >
 > **Never run `prisma migrate dev` against a database that already has
 > data in it.** The `embedding` (pgvector) and `content_tsv` (generated
 > full-text) columns are added via raw SQL, outside `schema.prisma` (Prisma
 > has no native vector type), so `migrate dev`'s drift detection will offer
-> to **drop both columns** — silently destroying every embedding. Applying
+> to **drop both columns** silently destroying every embedding. Applying
 > already-checked-in migrations should always go through
 > `pnpm --filter @scraper/db run prisma:deploy` instead.
 
-### Option B — fully containerized stack
+### Option B fully containerized stack
 
 Everything, including the apps, runs in Docker. Slower to iterate against
 (needs a rebuild on every code change) but closest to production/what the
@@ -156,7 +156,7 @@ results table.
 
 | Command | Purpose |
 |---|---|
-| `pnpm dev` | Run every app locally via Turborepo (needs Postgres/Redis reachable — see Option A) |
+| `pnpm dev` | Run every app locally via Turborepo (needs Postgres/Redis reachable see Option A) |
 | `pnpm lint` | ESLint across the workspace |
 | `pnpm typecheck` | `tsc --noEmit` across the workspace |
 | `pnpm test` | Vitest across the workspace |
@@ -175,27 +175,27 @@ build on every push/PR, on `ubuntu-latest`.
 See [`.env.example`](.env.example) for the full list. The two that trip
 people up:
 
-- `DATABASE_URL` / `REDIS_URL` — these are **host-facing** values
+- `DATABASE_URL` / `REDIS_URL` these are **host-facing** values
   (`localhost:5432` / `localhost:6379`) used by Prisma CLI and `pnpm dev`.
   The fully-containerized stack (`docker-compose.yml`) does **not** read
-  these from `.env` — it hardcodes the Docker-internal hostnames
+  these from `.env` it hardcodes the Docker-internal hostnames
   (`postgres`, `redis`) directly for the `api`/`worker` services, since
   containers can't resolve `localhost` to each other.
-- `ADMIN_TOKEN` — protects every `/admin/*` route and the admin UI.
+- `ADMIN_TOKEN` protects every `/admin/*` route and the admin UI.
   `.env.example` ships a `change-me` placeholder; **set a real value in
   your own `.env`**, which is gitignored.
 
 ## Testing strategy
 
-- **Unit** — chunking, dedup, robots parsing, citation extraction, rate
+- **Unit** chunking, dedup, robots parsing, citation extraction, rate
   limiting, RRF fusion (`*.test.ts` next to the source file in every
   package).
-- **API** — Vitest + Fastify's `inject()` against a mocked Prisma client
+- **API** Vitest + Fastify's `inject()` against a mocked Prisma client
   (`apps/api/src/app.test.ts`).
-- **Integration** (worker) — BullMQ job handlers tested directly against
+- **Integration** (worker) BullMQ job handlers tested directly against
   their processing functions.
 
-CI runs the full suite (no live OpenAI/network calls — those are mocked)
+CI runs the full suite (no live OpenAI/network calls those are mocked)
 on every push.
 
 ## Windows-specific notes
@@ -207,14 +207,14 @@ on every push.
   enable Developer Mode, or build via `docker compose build web`.
 - If `prisma generate` fails with `EPERM ... rename ...
   query_engine-windows.dll.node`, it's almost always VS Code's TypeScript/
-  Prisma language server holding the file open — close the relevant editor
+  Prisma language server holding the file open close the relevant editor
   tab or restart the language server. Doesn't affect Linux (Docker/CI).
 
 ## Target sites
 
 | Source | Type | Notes |
 |---|---|---|
-| `quotes.toscrape.com` | Static | sandbox site, purpose-built for scraping practice — no robots.txt/ToS ambiguity |
+| `quotes.toscrape.com` | Static | sandbox site, purpose-built for scraping practice no robots.txt/ToS ambiguity |
 | `quotes.toscrape.com/js` | JS-rendered | sandbox site; forces the Playwright fetch path |
 | `developer.mozilla.org/en-US/docs/Web/JavaScript` | 500+ pages | real technical reference content (headings, code blocks, tables); robots.txt allows crawling, CC-BY-SA licensed |
 

@@ -6,7 +6,7 @@ import { createRedisConnection } from '../redis.js';
 // Benchmark harness for the horizontal-scaling demo (docs/benchmarks.md):
 // enqueues one tracked crawl run for a source, waits for the crawl to truly
 // quiesce, and reports wall-clock throughput. Run it against 1, 2, 4 worker
-// replicas and compare pages/sec — the script itself does no scraping, so it
+// replicas and compare pages/sec the script itself does no scraping, so it
 // measures the workers, not the host it runs on.
 //
 //   pnpm --filter @scraper/worker run bench [source-name]   (default: quotes-static)
@@ -14,7 +14,7 @@ import { createRedisConnection } from '../redis.js';
 // Completion is defined by *quiescence*, not by the run's status flag: the
 // crawl is done when settled == queued and neither counter has moved for
 // STABLE_MS. This is deliberately robust to the premature-finalization race
-// documented in docs/benchmarks.md — the status can flip to SUCCEEDED while
+// documented in docs/benchmarks.md the status can flip to SUCCEEDED while
 // discovery is still fanning out, and the counters are only eventually
 // consistent. The bench reports that early flip (as `firstFinalizedAt`) as a
 // finding rather than trusting it as the end of work.
@@ -30,7 +30,7 @@ async function main() {
   const sourceName = process.argv[2] ?? 'quotes-static';
   const source = await prisma.source.findUnique({ where: { name: sourceName } });
   if (!source) {
-    console.error(`no source named "${sourceName}" — run prisma:seed first`);
+    console.error(`no source named "${sourceName}" run prisma:seed first`);
     process.exitCode = 1;
     return;
   }
@@ -95,7 +95,7 @@ async function main() {
         if (firstFinalizedAtSec !== null && firstFinalizedPages !== settled) {
           console.log(
             `NOTE: run reported ${run.status} early at ${firstFinalizedAtSec.toFixed(1)}s with ` +
-              `${firstFinalizedPages}/${run.pagesQueued} pages — premature finalization (see docs/benchmarks.md).`,
+              `${firstFinalizedPages}/${run.pagesQueued} pages premature finalization (see docs/benchmarks.md).`,
           );
         }
         if (settled !== run.pagesQueued) process.exitCode = 1;

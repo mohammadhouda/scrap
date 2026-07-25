@@ -9,7 +9,7 @@ const existingSources = await prisma.source.count();
 await prisma.$disconnect();
 
 if (existingSources > 0) {
-  console.log(`database already has ${existingSources} source(s) — skipping seed`);
+  console.log(`database already has ${existingSources} source(s) skipping seed`);
 } else {
   await import('./seed.js');
 }

@@ -70,7 +70,7 @@ export async function processScrapeJob(
     result = source.renderJs ? await playwrightFetch(url) : await cheerioFetch(url);
   } catch (err) {
     // A non-HTML response (text/plain, JSON, a stray .txt link, ...) is a
-    // *permanent* condition — retrying can't turn it into a page. Settle it as
+    // *permanent* condition retrying can't turn it into a page. Settle it as
     // a clean skip so it never burns retries or pollutes the DLQ. (The link
     // filter drops most of these before they're ever enqueued; this catches
     // the rest, e.g. a clean URL that serves a non-HTML content-type.)
@@ -78,7 +78,7 @@ export async function processScrapeJob(
       return { skipped: 'content-type' };
     }
     // The origin pushed back (429/503): open a shared cooldown for the whole
-    // domain — checkRateLimit surfaces it to every worker, so the fleet backs
+    // domain checkRateLimit surfaces it to every worker, so the fleet backs
     // off, and this job's own retries defer against it too. Rethrowing keeps
     // the normal attempt budget: a persistently-hostile URL still ends up in
     // the DLQ after 5 attempts instead of bouncing forever.
@@ -138,7 +138,7 @@ export function buildScrapeWorker(connection: Redis, queues: Queues): Worker<Scr
         throw new DelayedError();
       }
 
-      // Terminal success (versioned / unchanged / robots-skip) — settle the
+      // Terminal success (versioned / unchanged / robots-skip) settle the
       // crawl-run counter. Terminal *failures* are settled in index.ts's
       // 'failed' handler once retries are exhausted. A cancelled-skip is NOT
       // settled: the run is already finalized, and counting it would keep
