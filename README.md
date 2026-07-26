@@ -7,7 +7,7 @@ scalable BullMQ workers coordinated through Redis.
 
 See [`docs/architecture.md`](docs/architecture.md) for how it fits
 together (component diagram, URL lifecycle, indexing/retrieval pipeline,
-API reference) and [`plan.md`](plan.md) for the original build plan.
+API reference).
 
 ## What it does
 
